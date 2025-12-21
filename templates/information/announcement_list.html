@@ -22,13 +22,13 @@
         <form method="get" class="row g-3">
             <div class="col-md-4">
                 <select name="filter" class="form-select" onchange="this.form.submit()">
-                    <option value="all" {% if request.GET.filter == 'all' or not request.GET.filter %}selected{% endif %}>All Announcements</option>
-                    <option value="important" {% if request.GET.filter == 'important' %}selected{% endif %}>Important Only</option>
-                    <option value="recent" {% if request.GET.filter == 'recent' %}selected{% endif %}>Last 7 Days</option>
+                    <option value="all" {% if filter_type == 'all' or not filter_type %}selected{% endif %}>All Announcements</option>
+                    <option value="important" {% if filter_type == 'important' %}selected{% endif %}>Important Only</option>
+                    <option value="recent" {% if filter_type == 'recent' %}selected{% endif %}>Last 7 Days</option>
                 </select>
             </div>
             <div class="col-md-6">
-                <input type="text" name="search" class="form-control" placeholder="Search announcements..." value="{{ request.GET.search }}">
+                <input type="text" name="search" class="form-control" placeholder="Search announcements..." value="{{ search_query }}">
             </div>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-outline-primary w-100">
@@ -44,7 +44,7 @@
     <div class="row g-4">
         {% for announcement in announcements %}
             <div class="col-12">
-                <div class="card shadow-sm {% if announcement.is_important %}border-danger{% endif %}">
+                <div class="card shadow-sm {% if announcement.is_important %}border-danger border-2{% endif %}">
                     <div class="row g-0">
                         <!-- Thumbnail Image -->
                         {% if announcement.image %}
@@ -52,7 +52,7 @@
                                 <img src="{{ announcement.image.url }}" 
                                      class="img-fluid h-100" 
                                      alt="{{ announcement.title }}"
-                                     style="object-fit: cover; max-height: 200px; width: 100%;">
+                                     style="object-fit: cover; max-height: 250px; width: 100%;">
                             </div>
                             <div class="col-md-9">
                         {% else %}
@@ -70,14 +70,14 @@
                                                 {% endif %}
                                                 
                                                 {% if announcement.priority %}
-                                                    <span class="badge bg-{% if announcement.priority == 'high' %}danger{% elif announcement.priority == 'medium' %}warning text-dark{% else %}secondary{% endif %}">
-                                                        <i class="bi bi-flag-fill"></i> {{ announcement.priority|title }}
+                                                    <span class="badge bg-{% if announcement.priority == 'urgent' or announcement.priority == 'high' %}danger{% elif announcement.priority == 'normal' %}warning text-dark{% else %}secondary{% endif %}">
+                                                        <i class="bi bi-flag-fill"></i> {{ announcement.get_priority_display }}
                                                     </span>
                                                 {% endif %}
                                                 
                                                 {% if announcement.category %}
                                                     <span class="badge bg-info">
-                                                        <i class="bi bi-tag-fill"></i> {{ announcement.category|title }}
+                                                        <i class="bi bi-tag-fill"></i> {{ announcement.get_category_display }}
                                                     </span>
                                                 {% endif %}
                                                 
@@ -106,13 +106,23 @@
                                             <!-- Meta Information -->
                                             <p class="text-muted small mb-2">
                                                 <i class="bi bi-person-circle"></i> 
-                                                Posted by {{ announcement.teacher.user.get_full_name }}
+                                                Posted by 
+                                                {% if announcement.teacher and announcement.teacher.user %}
+                                                    {{ announcement.teacher.user.get_full_name }}
+                                                {% else %}
+                                                    Unknown
+                                                {% endif %}
                                                 <span class="mx-2">|</span>
                                                 <i class="bi bi-calendar3"></i> 
                                                 {{ announcement.publish_date|date:"F d, Y" }}
                                                 <span class="mx-2">|</span>
                                                 <i class="bi bi-clock"></i> 
                                                 {{ announcement.publish_date|timesince }} ago
+                                                {% if announcement.views_count %}
+                                                    <span class="mx-2">|</span>
+                                                    <i class="bi bi-eye"></i>
+                                                    {{ announcement.views_count }} view{{ announcement.views_count|pluralize }}
+                                                {% endif %}
                                             </p>
                                             
                                             <!-- Content Preview -->
@@ -131,7 +141,7 @@
                                                     <a href="{% url 'information:announcement_edit' announcement.id %}" class="btn btn-sm btn-outline-warning">
                                                         <i class="bi bi-pencil"></i> Edit
                                                     </a>
-                                                    <button class="btn btn-sm btn-outline-danger" 
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" 
                                                             data-bs-toggle="modal" 
                                                             data-bs-target="#deleteModal{{ announcement.id }}">
                                                         <i class="bi bi-trash"></i> Delete
@@ -146,26 +156,32 @@
                 </div>
             </div>
             
-            <!-- Delete Confirmation Modal -->
+            <!-- Delete Confirmation Modal - FIXED TO USE POST -->
             {% if user.role == 'teacher' and announcement.teacher.id == user.teacher_profile.id %}
-                <div class="modal fade" id="deleteModal{{ announcement.id }}" tabindex="-1">
+                <div class="modal fade" id="deleteModal{{ announcement.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ announcement.id }}" aria-hidden="true">
                     <div class="modal-dialog">
                         <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Confirm Delete</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <div class="modal-header bg-danger text-white">
+                                <h5 class="modal-title" id="deleteModalLabel{{ announcement.id }}">
+                                    <i class="bi bi-exclamation-triangle"></i> Confirm Delete
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
                                 <p>Are you sure you want to delete this announcement?</p>
-                                <p class="fw-bold">"{{ announcement.title }}"</p>
-                                <p class="text-danger small">This action cannot be undone.</p>
+                                <p class="fw-bold text-primary">"{{ announcement.title }}"</p>
+                                <p class="text-danger small mb-0">
+                                    <i class="bi bi-info-circle"></i> This action cannot be undone.
+                                </p>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </button>
                                 <form method="post" action="{% url 'information:announcement_delete' announcement.id %}" style="display: inline;">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-danger">
-                                        <i class="bi bi-trash"></i> Delete
+                                        <i class="bi bi-trash"></i> Delete Announcement
                                     </button>
                                 </form>
                             </div>
@@ -176,13 +192,15 @@
         {% endfor %}
     </div>
     
-    <!-- Pagination -->
+    <!-- Pagination (if needed) -->
     {% if is_paginated %}
-        <nav class="mt-4">
+        <nav class="mt-4" aria-label="Page navigation">
             <ul class="pagination justify-content-center">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if filter_type %}&filter={{ filter_type }}{% endif %}">Previous</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if filter_type %}&filter={{ filter_type }}{% endif %}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
                     </li>
                 {% endif %}
                 
@@ -194,22 +212,26 @@
                 
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if filter_type %}&filter={{ filter_type }}{% endif %}">Next</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if filter_type %}&filter={{ filter_type }}{% endif %}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
                     </li>
                 {% endif %}
             </ul>
         </nav>
     {% endif %}
 {% else %}
-    <div class="alert alert-info text-center">
-        <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
-        <p class="mb-2">
+    <!-- No Announcements Message -->
+    <div class="alert alert-info text-center py-5">
+        <i class="bi bi-info-circle fs-1 d-block mb-3"></i>
+        <h5 class="mb-2">
             {% if search_query %}
                 No announcements found matching "{{ search_query }}".
             {% else %}
                 No announcements available at this time.
             {% endif %}
-        </p>
+        </h5>
+        <p class="text-muted mb-3">Check back later for updates!</p>
         {% if user.role == 'teacher' %}
             <a href="{% url 'information:create_announcement' %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> Create First Announcement
@@ -225,6 +247,20 @@
     .badge {
         font-size: 0.85rem;
         padding: 0.4em 0.8em;
+        margin-right: 0.25rem;
+    }
+    
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }
+    
+    .border-danger {
+        border-left: 4px solid #dc3545 !important;
     }
 </style>
 {% endblock %}

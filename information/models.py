@@ -106,13 +106,15 @@ class Announcement(models.Model):
     class_obj = models.ForeignKey('monitoring.Class', on_delete=models.SET_NULL, null=True, blank=True)
     target_levels = models.CharField(max_length=255, blank=True, null=True)
     
-    # Author - CHANGED FROM posted_by TO teacher
-    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True)
+    # Author - Use 'teacher' consistently
+    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, related_name='announcements')
     
     # Attachments
     image = models.ImageField(upload_to='announcements/images/', null=True, blank=True, help_text='Banner image for announcement')
     attachment = models.FileField(upload_to='announcement_files/', null=True, blank=True)
     
+    # ADDED: Missing fields referenced in views/templates
+    is_important = models.BooleanField(default=False, help_text='Mark as important announcement')
     
     # Visibility
     is_pinned = models.BooleanField(default=False)
@@ -131,26 +133,39 @@ class Announcement(models.Model):
         return f"{self.title} - {self.priority}"
     
     def is_expired(self):
-        from django.utils import timezone
         if self.expiry_date:
             return timezone.now() > self.expiry_date
         return False
     
     class Meta:
-        ordering = ['-priority', '-created_at']
+        ordering = ['-is_pinned', '-priority', '-created_at']
         verbose_name = "Announcement"
         verbose_name_plural = "Announcements"
 
 
 class AnnouncementRead(models.Model):
     """Track which parents have read announcements"""
-    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE)
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='reads')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     read_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         unique_together = ['announcement', 'user']
+        verbose_name = "Announcement Read"
+        verbose_name_plural = "Announcement Reads"
 
+
+# ADDED: Missing model referenced in views
+class AnnouncementView(models.Model):
+    """Track announcement views"""
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='views')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['announcement', 'user']
+        verbose_name = "Announcement View"
+        verbose_name_plural = "Announcement Views"
 
 class BotMessage(models.Model):
     """Predetermined chatbot responses"""

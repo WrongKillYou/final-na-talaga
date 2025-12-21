@@ -98,56 +98,60 @@ def delete_event(request, event_id):
 
 @login_required
 def announcement_list(request):
-    """List all announcements with filtering and search"""
-    # Base queryset - get all active announcements
-    announcements = Announcement.objects.filter(
-        is_active=True
-    ).select_related('teacher__user').order_by('-created_at')
-    
-    # DEBUG: Print total count
-    print(f"Total announcements found: {announcements.count()}")
-    for ann in announcements[:3]:  # Print first 3
-        print(f"ID: {ann.id}, Title: {ann.title}, Has image: {bool(ann.image)}")
-        if ann.image:
-            print(f"  Image path: {ann.image.name}")
-    
-    # Filter by role
-    if request.user.is_parent():
-        announcements = announcements.filter(
-            Q(target_audience='all') | Q(target_audience='parents')
-        )
-    elif request.user.is_teacher():
-        announcements = announcements.filter(
-            Q(target_audience='all') | Q(target_audience='teachers')
-        )
-    
-    print(f"After filtering: {announcements.count()} announcements")
-    
-    # Apply filters from GET parameters
+    """List all announcements with detailed debug logging"""
+    announcements = Announcement.objects.select_related('teacher__user').order_by('-created_at')
+
+    print("=== All Announcements in DB ===")
+    for ann in announcements:
+        print(f"ID: {ann.id}, Title: {ann.title}, Active: {ann.is_active}, Target: {ann.target_audience}, Teacher: {ann.teacher}")
+
+    # Filter by is_active
+    announcements = announcements.filter(is_active=True)
+    print("\n=== After is_active=True filter ===")
+    for ann in announcements:
+        print(f"ID: {ann.id}, Title: {ann.title}")
+
+    # Role-based filtering
+    print(f"\nUser role: {request.user.role}")
+    filtered_announcements = []
+    for ann in announcements:
+        show = False
+        if request.user.is_parent():
+            if ann.target_audience in [None, '', 'all', 'parents']:
+                show = True
+        elif request.user.is_teacher():
+            if ann.target_audience in [None, '', 'all', 'teachers']:
+                show = True
+        else:
+            show = True  # other users see all
+
+        print(f"Checking announcement '{ann.title}' (Target: {ann.target_audience}): {'SHOW' if show else 'HIDE'}")
+        if show:
+            filtered_announcements.append(ann)
+
+    announcements = filtered_announcements
+
+    # Apply GET filters
     filter_type = request.GET.get('filter', 'all')
-    
     if filter_type == 'important':
-        announcements = announcements.filter(is_important=True)
+        announcements = [a for a in announcements if a.is_important]
     elif filter_type == 'recent':
         seven_days_ago = timezone.now() - timedelta(days=7)
-        announcements = announcements.filter(created_at__gte=seven_days_ago)
-    
-    # Apply search
+        announcements = [a for a in announcements if a.created_at >= seven_days_ago]
+
     search_query = request.GET.get('search', '').strip()
     if search_query:
-        announcements = announcements.filter(
-            Q(title__icontains=search_query) | 
-            Q(content__icontains=search_query)
-        )
-    
-    print(f"Final count: {announcements.count()} announcements")
-    
+        announcements = [a for a in announcements if search_query.lower() in (a.title.lower() + a.content.lower())]
+
+    print(f"\nFinal announcements to display ({len(announcements)}): {[a.title for a in announcements]}")
+
     context = {
         'announcements': announcements,
         'search_query': search_query,
         'filter_type': filter_type,
     }
     return render(request, 'information/announcement_list.html', context)
+
 
 
 @login_required
@@ -244,7 +248,7 @@ def create_announcement(request):
             announcement.teacher = teacher
             
             # Handle custom fields
-            announcement.is_active = form.cleaned_data.get('is_active', True)
+            announcement.is_active = True
             if hasattr(announcement, 'is_pinned'):
                 announcement.is_pinned = form.cleaned_data.get('is_pinned', False)
             
