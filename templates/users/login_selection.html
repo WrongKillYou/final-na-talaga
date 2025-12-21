@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - School Monitor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8">
+        <h2 class="text-center mb-5">Welcome to School Monitor</h2>
+        
+        <div class="row g-4">
+            <!-- Parent Login -->
+            <div class="col-md-6">
+                <div class="card text-center h-100">
+                    <div class="card-body d-flex flex-column">
+                        <i class="bi bi-people-fill display-1 text-primary mb-3"></i>
+                        <h4 class="card-title">Parent Login</h4>
+                        <p class="card-text">Access your children's grades and attendance</p>
+                        <a href="{% url 'users:parent_login' %}" class="btn btn-primary mt-auto">
+                            Login as Parent
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Teacher Login -->
+            <div class="col-md-6">
+                <div class="card text-center h-100">
+                    <div class="card-body d-flex flex-column">
+                        <i class="bi bi-person-badge-fill display-1 text-success mb-3"></i>
+                        <h4 class="card-title">Teacher Login</h4>
+                        <p class="card-text">Manage classes, grades, and attendance</p>
+                        <a href="{% url 'users:teacher_login' %}" class="btn btn-success mt-auto">
+                            Login as Teacher
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

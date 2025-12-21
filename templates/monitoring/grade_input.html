@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+
+{% block title %}Input Grades - {{ class_obj.subject }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'users:teacher_dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'monitoring:class_list' %}">My Classes</a></li>
+        <li class="breadcrumb-item active">Input Grades</li>
+    </ol>
+</nav>
+
+<!-- Class Info Header -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h3 class="mb-2">{{ class_obj.subject }}</h3>
+                <p class="text-muted mb-0">
+                    <span class="badge bg-primary me-2">{{ class_obj.grade_level|title }}</span>
+                    <span class="badge bg-success me-2">{{ class_obj.section }}</span>
+                    <span class="badge bg-info">{{ class_obj.school_year }}</span>
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <p class="mb-1"><strong>Total Students:</strong> {{ students.count }}</p>
+                <p class="mb-0"><strong>Quarter:</strong> {{ current_quarter }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quarter Selection -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-calendar3"></i> Select Quarter</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-6">
+                <label for="quarter" class="form-label">Quarter</label>
+                <select name="quarter" id="quarter" class="form-select" onchange="this.form.submit()">
+                    <option value="1" {% if current_quarter == 1 %}selected{% endif %}>1st Quarter</option>
+                    <option value="2" {% if current_quarter == 2 %}selected{% endif %}>2nd Quarter</option>
+                    <option value="3" {% if current_quarter == 3 %}selected{% endif %}>3rd Quarter</option>
+                    <option value="4" {% if current_quarter == 4 %}selected{% endif %}>4th Quarter</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkGradeModal">
+                    <i class="bi bi-upload"></i> Bulk Upload
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Grade Input Form -->
+<form method="post" id="gradeForm">
+    {% csrf_token %}
+    <input type="hidden" name="quarter" value="{{ current_quarter }}">
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-pencil-square text-success"></i> Student Grades</h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="calculateAllFinalGrades()">
+                        <i class="bi bi-calculator"></i> Auto-Calculate All
+                    </button>
+                    <button type="submit" class="btn btn-sm btn-success">
+                        <i class="bi bi-save"></i> Save Grades
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 20%;">Student Name</th>
+                            <th style="width: 10%;">LRN</th>
+                            <th class="text-center" style="width: 13%;">
+                                Written Works
+                                <br>
+                                <small class="text-muted">(30%)</small>
+                            </th>
+                            <th class="text-center" style="width: 13%;">
+                                Performance Task
+                                <br>
+                                <small class="text-muted">(50%)</small>
+                            </th>
+                            <th class="text-center" style="width: 13%;">
+                                Quarterly Exam
+                                <br>
+                                <small class="text-muted">(20%)</small>
+                            </th>
+                            <th class="text-center" style="width: 13%;">Final Grade</th>
+                            <th class="text-center" style="width: 13%;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                            <tr id="row-{{ student.id }}">
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <strong>{{ student.get_full_name }}</strong>
+                                    {% if student.photo %}
+                                        <img src="{{ student.photo.url }}" class="rounded-circle ms-2" 
+                                             width="25" height="25" alt="">
+                                    {% endif %}
+                                </td>
+                                <td><small class="text-muted">{{ student.lrn }}</small></td>
+                                
+                                <!-- Written Works -->
+                                <td>
+                                    <input type="number" 
+                                           name="written_work_{{ student.id }}" 
+                                           id="ww_{{ student.id }}"
+                                           class="form-control form-control-sm text-center" 
+                                           min="0" max="100" step="0.01"
+                                           value="{{ student.current_grade.written_work|default:'' }}"
+                                           onchange="calculateFinalGrade({{ student.id }})"
+                                           placeholder="0.00">
+                                </td>
+                                
+                                <!-- Performance Task -->
+                                <td>
+                                    <input type="number" 
+                                           name="performance_task_{{ student.id }}" 
+                                           id="pt_{{ student.id }}"
+                                           class="form-control form-control-sm text-center" 
+                                           min="0" max="100" step="0.01"
+                                           value="{{ student.current_grade.performance_task|default:'' }}"
+                                           onchange="calculateFinalGrade({{ student.id }})"
+                                           placeholder="0.00">
+                                </td>
+                                
+                                <!-- Quarterly Exam -->
+                                <td>
+                                    <input type="number" 
+                                           name="quarterly_exam_{{ student.id }}" 
+                                           id="qe_{{ student.id }}"
+                                           class="form-control form-control-sm text-center" 
+                                           min="0" max="100" step="0.01"
+                                           value="{{ student.current_grade.quarterly_exam|default:'' }}"
+                                           onchange="calculateFinalGrade({{ student.id }})"
+                                           placeholder="0.00">
+                                </td>
+                                
+                                <!-- Final Grade (Calculated) -->
+                                <td>
+                                    <input type="number" 
+                                           name="final_grade_{{ student.id }}" 
+                                           id="final_{{ student.id }}"
+                                           class="form-control form-control-sm text-center fw-bold" 
+                                           min="0" max="100" step="0.01"
+                                           value="{{ student.current_grade.final_grade|default:'' }}"
+                                           readonly
+                                           style="background-color: #f8f9fa;">
+                                </td>
+                                
+                                <!-- Status Badge -->
+                                <td class="text-center">
+                                    <span id="status_{{ student.id }}" class="badge">
+                                        {% if student.current_grade %}
+                                            {% if student.current_grade.final_grade >= 90 %}
+                                                <span class="badge bg-success">Outstanding</span>
+                                            {% elif student.current_grade.final_grade >= 85 %}
+                                                <span class="badge bg-info">Very Satisfactory</span>
+                                            {% elif student.current_grade.final_grade >= 80 %}
+                                                <span class="badge bg-primary">Satisfactory</span>
+                                            {% elif student.current_grade.final_grade >= 75 %}
+                                                <span class="badge bg-warning">Fairly Satisfactory</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Did Not Meet</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary">Not Graded</span>
+                                        {% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    No students enrolled in this class.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        Grades are calculated as: (WW×30%) + (PT×50%) + (QE×20%)
+                    </small>
+                </div>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-save"></i> Save All Grades
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Bulk Upload Modal -->
+<div class="modal fade" id="bulkGradeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Bulk Upload Grades</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'monitoring:bulk_upload_grades' class_obj.id %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Upload CSV File</label>
+                        <input type="file" name="grade_file" class="form-control" accept=".csv" required>
+                        <small class="text-muted">
+                            File must contain: LRN, Written Work, Performance Task, Quarterly Exam
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <a href="{% url 'monitoring:download_grade_template' class_obj.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-download"></i> Download Template
+                        </a>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Upload
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Calculate final grade for a single student
+function calculateFinalGrade(studentId) {
+    const ww = parseFloat(document.getElementById(`ww_${studentId}`).value) || 0;
+    const pt = parseFloat(document.getElementById(`pt_${studentId}`).value) || 0;
+    const qe = parseFloat(document.getElementById(`qe_${studentId}`).value) || 0;
+    
+    // Formula: (WW × 0.30) + (PT × 0.50) + (QE × 0.20)
+    const finalGrade = (ww * 0.30) + (pt * 0.50) + (qe * 0.20);
+    
+    // Update final grade input
+    document.getElementById(`final_${studentId}`).value = finalGrade.toFixed(2);
+    
+    // Update status badge
+    updateStatusBadge(studentId, finalGrade);
+}
+
+// Update status badge based on grade
+function updateStatusBadge(studentId, grade) {
+    const statusElement = document.getElementById(`status_${studentId}`);
+    let badgeClass = 'bg-secondary';
+    let badgeText = 'Not Graded';
+    
+    if (grade >= 90) {
+        badgeClass = 'bg-success';
+        badgeText = 'Outstanding';
+    } else if (grade >= 85) {
+        badgeClass = 'bg-info';
+        badgeText = 'Very Satisfactory';
+    } else if (grade >= 80) {
+        badgeClass = 'bg-primary';
+        badgeText = 'Satisfactory';
+    } else if (grade >= 75) {
+        badgeClass = 'bg-warning';
+        badgeText = 'Fairly Satisfactory';
+    } else if (grade > 0) {
+        badgeClass = 'bg-danger';
+        badgeText = 'Did Not Meet';
+    }
+    
+    statusElement.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+}
+
+// Calculate all final grades
+function calculateAllFinalGrades() {
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const studentId = row.id.replace('row-', '');
+        if (studentId) {
+            calculateFinalGrade(studentId);
+        }
+    });
+}
+
+// Form submission confirmation
+document.getElementById('gradeForm').addEventListener('submit', function(e) {
+    if (!confirm('Are you sure you want to save these grades? This action cannot be undone.')) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

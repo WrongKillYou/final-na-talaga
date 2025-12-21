@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ child.get_full_name }} - Details{% endblock %}
+
+{% block content %}
+<!-- Child Header -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                {% if child.photo %}
+                    <img src="{{ child.photo.url }}" class="rounded-circle" 
+                         width="100" height="100" alt="{{ child.get_full_name }}">
+                {% else %}
+                    <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center" 
+                         style="width: 100px; height: 100px; font-size: 2rem;">
+                        {{ child.first_name.0 }}{{ child.last_name.0 }}
+                    </div>
+                {% endif %}
+            </div>
+            <div class="col">
+                <h3 class="mb-1">{{ child.get_full_name }}</h3>
+                <p class="text-muted mb-2">
+                    LRN: {{ child.lrn }} | {{ child.grade_level|title }} - {{ child.section }}
+                </p>
+                <p class="mb-0">
+                    <strong>Age:</strong> {{ child.get_age }} years old |
+                    <strong>Adviser:</strong> {{ child.class_teacher.user.get_full_name }}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="childTabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#grades">
+            Grades
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#attendance">
+            Attendance
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#classes">
+            Classes
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Grades Tab -->
+    <div class="tab-pane fade show active" id="grades">
+        {% if grades_by_quarter %}
+            {% for quarter, grades in grades_by_quarter.items %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">Quarter {{ quarter }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Final Grade</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for grade in grades %}
+                                        <tr>
+                                            <td>{{ grade.class_obj.subject }}</td>
+                                            <td>
+                                                <strong>{{ grade.final_grade|floatformat:0 }}</strong>
+                                            </td>
+                                            <td>
+                                                {% if grade.final_grade >= 75 %}
+                                                    <span class="badge bg-success">Passed</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Failed</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">No grades posted yet.</div>
+        {% endif %}
+    </div>
+    
+    <!-- Attendance Tab -->
+    <div class="tab-pane fade" id="attendance">
+        <!-- Attendance Summary -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Last 30 Days Summary</h5>
+                <div class="row text-center mt-3">
+                    <div class="col-3">
+                        <h3 class="text-success">{{ attendance_summary.present_days }}</h3>
+                        <small>Present</small>
+                    </div>
+                    <div class="col-3">
+                        <h3 class="text-danger">{{ attendance_summary.absent_days }}</h3>
+                        <small>Absent</small>
+                    </div>
+                    <div class="col-3">
+                        <h3 class="text-warning">{{ attendance_summary.late_days }}</h3>
+                        <small>Late</small>
+                    </div>
+                    <div class="col-3">
+                        <h3 class="text-primary">{{ attendance_summary.attendance_rate }}%</h3>
+                        <small>Rate</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Attendance Records -->
+        <div class="card">
+            <div class="card-body">
+                <h5>Recent Attendance</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Time In</th>
+                                <th>Time Out</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in attendance %}
+                                <tr>
+                                    <td>{{ record.date|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% if record.status == 'present' %}
+                                            <span class="badge bg-success">Present</span>
+                                        {% elif record.status == 'absent' %}
+                                            <span class="badge bg-danger">Absent</span>
+                                        {% elif record.status == 'late' %}
+                                            <span class="badge bg-warning">Late</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ record.status|capfirst }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ record.time_in|time:"g:i A"|default:"—" }}</td>
+                                    <td>{{ record.time_out|time:"g:i A"|default:"—" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Classes Tab -->
+    <div class="tab-pane fade" id="classes">
+        <div class="card">
+            <div class="card-body">
+                <h5>Enrolled Classes</h5>
+                <ul class="list-group list-group-flush">
+                    {% for class in enrolled_classes %}
+                        <li class="list-group-item">
+                            <strong>{{ class.subject }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                Teacher: {{ class.teacher.user.get_full_name }}
+                            </small>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item">No classes enrolled.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Back Button -->
+<div class="mt-4">
+    <a href="{% url 'users:parent_dashboard' %}" class="btn btn-secondary">
+        ← Back to Dashboard
+    </a>
+</div>
+{% endblock %}

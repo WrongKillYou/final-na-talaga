@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Chat History{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-chat-left-text"></i> Message History</h2>
+            <p class="text-muted mb-0">View all your conversations with teachers</p>
+        </div>
+        <a href="{% url 'users:parent_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-primary">{{ conversations.count }}</h3>
+                    <small class="text-muted">Total Conversations</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-success">{{ active_count }}</h3>
+                    <small class="text-muted">Active Chats</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-secondary">{{ closed_count }}</h3>
+                    <small class="text-muted">Closed Chats</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">All Conversations</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if conversations %}
+                <div class="list-group list-group-flush">
+                    {% for conversation in conversations %}
+                        <a href="{% url 'information:conversation_detail' conversation.id %}" 
+                           class="list-group-item list-group-item-action {% if conversation.unread_messages > 0 %}bg-light{% endif %}">
+                            <div class="d-flex align-items-start">
+                                <!-- Avatar -->
+                                <div class="me-3">
+                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" 
+                                         style="width: 50px; height: 50px;">
+                                        <i class="bi bi-person-fill fs-4"></i>
+                                    </div>
+                                </div>
+                                
+                                <!-- Content -->
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <div>
+                                            <h6 class="mb-0">
+                                                {{ conversation.teacher.user.get_full_name|default:"Waiting for teacher..." }}
+                                                {% if conversation.unread_messages > 0 %}
+                                                    <span class="badge bg-danger rounded-pill ms-2">
+                                                        {{ conversation.unread_messages }} new
+                                                    </span>
+                                                {% endif %}
+                                            </h6>
+                                            <small class="text-muted">{{ conversation.subject }}</small>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i> {{ conversation.updated_at|timesince }} ago
+                                        </small>
+                                    </div>
+                                    
+                                    {% if conversation.child %}
+                                        <small class="text-muted">
+                                            <i class="bi bi-person-badge"></i> Regarding: {{ conversation.child.get_full_name }}
+                                        </small>
+                                        <br>
+                                    {% endif %}
+                                    
+                                    {% if conversation.last_msg %}
+                                        <p class="mb-1 text-muted small">
+                                            <strong>{{ conversation.last_msg.sender_user.get_full_name }}:</strong>
+                                            {{ conversation.last_msg.message|truncatewords:15 }}
+                                        </p>
+                                    {% endif %}
+                                    
+                                    <div class="d-flex gap-2 mt-2">
+                                        <span class="badge 
+                                            {% if conversation.status == 'active' %}bg-success
+                                            {% elif conversation.status == 'waiting' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ conversation.get_status_display }}
+                                        </span>
+                                        <small class="text-muted">
+                                            <i class="bi bi-chat-dots"></i> {{ conversation.message_count }} messages
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                    <h5 class="mt-3 text-muted">No conversations yet</h5>
+                    <p class="text-muted">Start a conversation from your dashboard</p>
+                    <a href="{% url 'users:parent_dashboard' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Start New Conversation
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

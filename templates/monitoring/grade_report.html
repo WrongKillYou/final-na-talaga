@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block title %}Generate Reports{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="mb-4">
+    <h2><i class="bi bi-file-earmark-text text-primary"></i> Generate Reports</h2>
+    <p class="text-muted">Create and download various reports</p>
+</div>
+
+<!-- Report Types -->
+<div class="row g-4">
+    <!-- Grade Report -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-card-list"></i> Grade Report</h5>
+            </div>
+            <div class="card-body">
+                <p>Generate comprehensive grade reports for your classes.</p>
+                <form method="post" action="{% url 'monitoring:grade_report' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Class</label>
+                        <select name="class_id" class="form-select" required>
+                            <option value="">-- Choose a class --</option>
+                            {% for class in classes %}
+                                <option value="{{ class.id }}">
+                                    {{ class.subject }} - {{ class.grade_level }} {{ class.section }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Quarter</label>
+                        <select name="quarter" class="form-select" required>
+                            <option value="">-- Select quarter --</option>
+                            <option value="1">1st Quarter</option>
+                            <option value="2">2nd Quarter</option>
+                            <option value="3">3rd Quarter</option>
+                            <option value="4">4th Quarter</option>
+                            <option value="all">All Quarters</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Format</label>
+                        <select name="format" class="form-select" required>
+                            <option value="pdf">PDF</option>
+                            <option value="excel">Excel</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-download"></i> Generate Report
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Attendance Report -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Attendance Report</h5>
+            </div>
+            <div class="card-body">
+                <p>Generate attendance reports for a specific period.</p>
+                <form method="post" action="{% url 'monitoring:attendance_report' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Class</label>
+                        <select name="class_id" class="form-select" required>
+                            <option value="">-- Choose a class --</option>
+                            {% for class in classes %}
+                                <option value="{{ class.id }}">
+                                    {{ class.subject }} - {{ class.grade_level }} {{ class.section }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">End Date</label>
+                        <input type="date" name="end_date" class="form-control" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Format</label>
+                        <select name="format" class="form-select" required>
+                            <option value="pdf">PDF</option>
+                            <option value="excel">Excel</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-download"></i> Generate Report
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Class Summary Report -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Class Summary</h5>
+            </div>
+            <div class="card-body">
+                <p>Generate overall class performance summary.</p>
+                <form method="post" action="{% url 'monitoring:class_summary_report' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Class</label>
+                        <select name="class_id" class="form-select" required>
+                            <option value="">-- Choose a class --</option>
+                            {% for class in classes %}
+                                <option value="{{ class.id }}">
+                                    {{ class.subject }} - {{ class.grade_level }} {{ class.section }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Include</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_grades" id="grades" checked>
+                            <label class="form-check-label" for="grades">Grades</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_attendance" id="attendance" checked>
+                            <label class="form-check-label" for="attendance">Attendance</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_statistics" id="stats" checked>
+                            <label class="form-check-label" for="stats">Statistics</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-info w-100">
+                        <i class="bi bi-download"></i> Generate Report
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Student Performance Report -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-person-badge"></i> Student Performance</h5>
+            </div>
+            <div class="card-body">
+                <p>Generate individual student performance report.</p>
+                <form method="post" action="{% url 'monitoring:generate_student_report' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Class</label>
+                        <select name="class_id" class="form-select" id="classSelect" required>
+                            <option value="">-- Choose a class --</option>
+                            {% for class in classes %}
+                                <option value="{{ class.id }}">
+                                    {{ class.subject }} - {{ class.grade_level }} {{ class.section }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Student</label>
+                        <select name="student_id" class="form-select" required>
+                            <option value="">-- Choose a student --</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Report Period</label>
+                        <select name="period" class="form-select" required>
+                            <option value="quarter1">1st Quarter</option>
+                            <option value="quarter2">2nd Quarter</option>
+                            <option value="quarter3">3rd Quarter</option>
+                            <option value="quarter4">4th Quarter</option>
+                            <option value="all">Full Year</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="bi bi-download"></i> Generate Report
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Reports -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recently Generated Reports</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Report Type</th>
+                        <th>Class</th>
+                        <th>Generated</th>
+                        <th>Format</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Grade Report</td>
+                        <td>Mathematics - Grade 7 A</td>
+                        <td>2 hours ago</td>
+                        <td><span class="badge bg-danger">PDF</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> Download
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            No recent reports. Generate your first report above.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

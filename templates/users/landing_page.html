@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barangay Anonas Daycare Center</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #2E2E2E;
+            line-height: 1.6;
+            background-color: #FAFAFA;
+        }
+
+        header {
+            background: #FAFAFA;
+            padding: 15px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            color: #000000;
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 30px;
+            align-items: center;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: rgb(45, 44, 44);
+            transition: color 0.3s;
+        }
+
+        nav a:hover {
+            color: #FFD966;
+        }
+
+        .login-btn {
+            padding: 8px 24px;
+            border: 2px solid rgb(0, 0, 0);
+            border-radius: 5px;
+            color: rgb(0, 0, 0);
+            transition: all 0.3s;
+        }
+
+        .login-btn:hover {
+            background: rgb(228, 227, 227);
+            color: #000000;
+        }
+
+        .hero {
+            background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), 
+                        url("/media/photos/anonas_daycare.jpg");
+            background-size: cover;
+            background-position: center;
+            color: white;
+            padding: 120px 20px;
+            text-align: left;
+            position: relative;
+            min-height: 500px;
+            display: flex;
+            align-items: center;
+        }
+
+        .hero-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 30px;
+            font-weight: 700;
+            max-width: 600px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-start;
+            margin-top: 0;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #1F4FD8;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1840B8;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: #1F4FD8;
+        }
+
+        section {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 80px 20px;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .section-label {
+            color: #D62828;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .section-header h2 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: #2E2E2E;
+        }
+
+        .section-header p {
+            color: #666;
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.8;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .feature-card h3 {
+            margin: 15px 0 10px;
+            color: #2E2E2E;
+        }
+
+        .feature-card p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(31, 79, 216, 0.2);
+        }
+
+        .card-image {
+            background: linear-gradient(135deg, #1F4FD8 0%, #D62828 100%);
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            color: white;
+            width: 100%;
+            object-fit: cover;
+        }
+
+        .card-content {
+            padding: 20px;
+        }
+
+        .card-content h3 {
+            margin-bottom: 10px;
+            color: #2E2E2E;
+        }
+
+        .card-content .subtitle {
+            color: #D62828;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .card-content p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .card-link {
+            color: #1F4FD8;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .card-link:hover {
+            text-decoration: underline;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        footer {
+            background: #2E2E2E;
+            color: white;
+            padding: 40px 20px 20px;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .social-links a {
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+            transition: color 0.3s;
+        }
+
+        .social-links a:hover {
+            color: #FFD966;
+        }
+
+        .watermark {
+            text-align: center;
+            color: rgba(255,255,255,0.3);
+            font-size: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            nav ul {
+                display: none;
+            }
+
+            .features, .card-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">
+                <img src="/media/photos/anonas_logo.png" alt="Anonas Daycare Center Logo" class="logo-img">
+                <span>Anonas Daycare Center</span>
+            </div>
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#faqs">FAQs</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+            <a href="{% url 'users:login_selection' %}" class="login-btn">Log In</a>
+        </nav>
+    </header>
+
+    <section class="hero" id="home">
+        <div class="hero-content">
+            <h1>Welcome to Barangay<br>Anonas Daycare Center</h1>
+            <div class="cta-buttons">
+                <a href="{% url 'users:login_selection' %}">
+    <button class="btn btn-primary">Log In</button>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section id="about">
+        <div class="section-header">
+            <div class="section-label">ABOUT</div>
+            <h2>Nurturing young minds for a brighter community future.</h2>
+            <p>The Brgy. Anonas Daycare Center is a safe, nurturing, and child-friendly learning space dedicated to supporting the early development of young children in the community. We provide a caring environment where children are encouraged to learn, play, and grow through age-appropriate activities that build social, emotional, and basic academic skills. Guided by committed daycare workers and supported by the barangay, the center aims to help every child develop confidence, curiosity, and a love for learning as a strong foundation for their future education.</p>
+        </div>
+      
+        
+    </section>
+
+    <section>
+        <div class="section-header">
+            <div class="section-label">STUDY AND ENJOY</div>
+            <h2>Creating safe, joyful, and meaningful experiences for every child in our community.</h2>
+        </div>
+
+        <div class="card-grid">
+            <div class="card">
+                <img src="/media/photos/child_cong.jpg" alt="Anonas Children's Congress" class="card-image">
+                <div class="card-content">
+                    <h3>Children’s Congress 2025</h3>
+                    <div class="subtitle">Community Event</div>
+                    <p>A celebration of youth participation where children showcased talents, shared ideas, and enjoyed a fun-filled learning experience together.</p>                    
+                </div>
+            </div>
+            <div class="card">
+                <img src="/media/photos/fam_day.jpg" alt="Anonas Family Day" class="card-image">
+                <div class="card-content">
+                    <h3>Daycare Learning Session Activities</h3>
+                    <div class="subtitle">Early Childhood Education</div>
+                    <p>Engaging group activities designed to help children develop social skills, creativity, and confidence in a supportive environment.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/media/photos/teach_day.jpg" alt="Anonas Teacher's Day" class="card-image">
+                <div class="card-content">
+                    <h3>Nutrition Day at the Daycare Center</h3>
+                    <div class="subtitle">Health & Wellness</div>
+                    <p>A healthy meal-sharing activity that promotes proper nutrition, good habits, and awareness of balanced food choices among children.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/media/photos/year_end.jpg" alt="Anonas Year End" class="card-image">
+                <div class="card-content">
+                    <h3>Holiday Gift-Giving Celebration</h3>
+                    <div class="subtitle">Special Program</div>
+                    <p>A joyful celebration where children received gifts, shared smiles, and experienced the spirit of kindness and togetherness.</p>
+                </div>
+            </div>
+        </div>
+      
+    </section>
+
+       <!-- FAQ Section -->
+    <section id="faqs">
+        <div class="section-header">
+            <div class="section-label">FAQ's</div>
+            <h2>Frequently Asked Questions</h2>
+            <p>Find answers to common questions about the Brgy. Anonas Daycare Center.</p>
+        </div>
+
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-content">
+                    <h3>What are the daycare center's operating hours?</h3>
+                    <p>We operate Monday to Friday from 7:30 AM to 4:30 PM, excluding public holidays.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-content">
+                    <h3>What age group does the daycare accept?</h3>
+                    <p>We accept children aged 3 to 5 years old, focusing on early childhood development.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-content">
+                    <h3>What programs and activities are offered?</h3>
+                    <p>Our programs include structured learning, play-based activities, arts, music, and social development exercises.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-content">
+                    <h3>How can I enroll my child?</h3>
+                    <p>Enrollment can be done at the barangay hall or directly at the daycare center. Please bring your child's birth certificate and other necessary documents.</p>
+                </div>
+            </div>
+        </div>
+        <div class="text-center" style="margin-top: 40px;">
+    <p style="color:#666; margin-bottom: 15px;">
+        Have more questions? Talk to a teacher.
+    </p>
+</div>
+
+    </section>
+
+     <footer id="contact">
+        <div class="footer-content">
+            <div>
+                <h3 style="margin-bottom: 15px;">Contact Us</h3>
+                <p style="margin-bottom: 10px;">📱 09171468221</p>
+                <p>📘 <a href="https://www.facebook.com/barangay.anonas.2024" target="_blank" style="color: white; text-decoration: underline;">Facebook Page</a></p>
+            </div>
+            <div class="social-links">
+                <a href="tel:09171468221" title="Call Us">📞</a>
+                <a href="https://www.facebook.com/barangay.anonas.2024" target="_blank" title="Facebook">📘</a>
+                <a href="mailto:info@anonasdaycare.ph" title="Email">📧</a>
+            </div>
+        </div>
+        <div class="watermark">Copyright © 2025 Barangay Anonas Daycare Center. All rights reserved.</div>
+    </footer>
+</body>
+</html>

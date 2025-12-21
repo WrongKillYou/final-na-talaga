@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Class Grades - {{ class_obj.subject }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'users:teacher_dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'monitoring:class_list' %}">Classes</a></li>
+        <li class="breadcrumb-item active">Grades</li>
+    </ol>
+</nav>
+
+<!-- Class Header -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <h3>{{ class_obj.subject }} - Grades Overview</h3>
+        <p class="text-muted">
+            {{ class_obj.grade_level|title }} - {{ class_obj.section }} | {{ class_obj.school_year }}
+        </p>
+    </div>
+</div>
+
+<!-- Quarter Tabs -->
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#quarter1" type="button">
+            1st Quarter
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#quarter2" type="button">
+            2nd Quarter
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#quarter3" type="button">
+            3rd Quarter
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#quarter4" type="button">
+            4th Quarter
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content">
+    {% for quarter in quarters %}
+        <div class="tab-pane fade {% if quarter == 1 %}show active{% endif %}" id="quarter{{ quarter }}">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Quarter {{ quarter }} Grades</h5>
+                        <a href="{% url 'monitoring:grade_input' class_obj.id %}?quarter={{ quarter }}" 
+                           class="btn btn-sm btn-primary">
+                            <i class="bi bi-pencil"></i> Edit Grades
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th class="text-center">Written Works</th>
+                                    <th class="text-center">Performance Task</th>
+                                    <th class="text-center">Quarterly Exam</th>
+                                    <th class="text-center">Final Grade</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in students %}
+                                    <tr>
+                                        <td>{{ student.get_full_name }}</td>
+                                        <td class="text-center">—</td>
+                                        <td class="text-center">—</td>
+                                        <td class="text-center">—</td>
+                                        <td class="text-center">—</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-secondary">Not Graded</span>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

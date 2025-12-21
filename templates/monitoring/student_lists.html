@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+
+{% block title %}Students - {{ class_obj.subject }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'users:teacher_dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'monitoring:class_list' %}">Classes</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'monitoring:class_detail' class_obj.id %}">{{ class_obj.subject }}</a></li>
+        <li class="breadcrumb-item active">Students</li>
+    </ol>
+</nav>
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>{{ class_obj.subject }} - Students</h2>
+        <p class="text-muted mb-0">
+            {{ class_obj.grade_level|title }} - {{ class_obj.section }} | 
+            Total: {{ students.count }}
+        </p>
+    </div>
+    <div>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#exportModal">
+            <i class="bi bi-download"></i> Export List
+        </button>
+    </div>
+</div>
+
+<!-- Student Cards Grid -->
+<div class="row g-4 mb-4">
+    {% for student in students %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-start mb-3">
+                        {% if student.photo %}
+                            <img src="{{ student.photo.url }}" 
+                                 class="rounded-circle me-3" 
+                                 width="60" height="60" 
+                                 alt="{{ student.get_full_name }}"
+                                 style="object-fit: cover;">
+                        {% else %}
+                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" 
+                                 style="width: 60px; height: 60px; font-size: 1.5rem;">
+                                {{ student.first_name.0 }}{{ student.last_name.0 }}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">{{ student.get_full_name }}</h6>
+                            <small class="text-muted d-block">LRN: {{ student.lrn }}</small>
+                            <small class="text-muted d-block">
+                                {{ student.get_gender_display }} | {{ student.get_age }} years old
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Stats -->
+                    <div class="row text-center mb-3">
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-primary">
+                                    {% if student.current_grade %}
+                                        {{ student.current_grade|floatformat:0 }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">Grade</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <div class="fw-bold text-success">
+                                    {% if student.attendance_rate %}
+                                        {{ student.attendance_rate }}%
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">Attendance</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Button -->
+                    <button class="btn btn-sm btn-outline-primary w-100" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#studentModal{{ student.id }}">
+                        <i class="bi bi-eye"></i> View Details
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Student Detail Modal -->
+        <div class="modal fade" id="studentModal{{ student.id }}" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ student.get_full_name }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-4 text-center mb-3">
+                                {% if student.photo %}
+                                    <img src="{{ student.photo.url }}" 
+                                         class="rounded-circle mb-2" 
+                                         width="120" height="120" 
+                                         alt="{{ student.get_full_name }}">
+                                {% else %}
+                                    <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" 
+                                         style="width: 120px; height: 120px; font-size: 3rem;">
+                                        {{ student.first_name.0 }}{{ student.last_name.0 }}
+                                    </div>
+                                {% endif %}
+                                <h5>{{ student.get_full_name }}</h5>
+                            </div>
+                            <div class="col-md-8">
+                                <h6>Personal Information</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <th style="width: 40%;">LRN:</th>
+                                        <td>{{ student.lrn }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Gender:</th>
+                                        <td>{{ student.get_gender_display }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Date of Birth:</th>
+                                        <td>{{ student.date_of_birth|date:"F d, Y" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Age:</th>
+                                        <td>{{ student.get_age }} years old</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Grade & Section:</th>
+                                        <td>{{ student.grade_level|title }} - {{ student.section }}</td>
+                                    </tr>
+                                </table>
+                                
+                                <h6 class="mt-3">Guardian Information</h6>
+                                <ul class="list-unstyled">
+                                    {% for parent in student.parents.all %}
+                                        <li>
+                                            <strong>{{ parent.user.get_full_name }}</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                {{ parent.parent_contact }} | {{ parent.parent_email }}
+                                            </small>
+                                        </li>
+                                    {% empty %}
+                                        <li class="text-muted">No guardian information</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No students enrolled in this class.
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Export Student List</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Choose export format:</p>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'monitoring:export_students' class_obj.id %}?format=csv" class="btn btn-outline-success">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Export as CSV
+                    </a>
+                    <a href="{% url 'monitoring:export_students' class_obj.id %}?format=pdf" class="btn btn-outline-danger">
+                        <i class="bi bi-file-earmark-pdf"></i> Export as PDF
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

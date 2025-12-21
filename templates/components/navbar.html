@@ -1,0 +1,91 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'users:login_selection' %}">
+            Anonas Daycare Center
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+            {% if user.is_authenticated %}
+                <ul class="navbar-nav ms-auto">
+                  
+                
+                 {% if user.is_parent %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'users:parent_dashboard' %}">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'information:announcement_list' %}">Announcements</a>
+                        </li>
+                          <!-- Messages/Chat History Dropdown -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle position-relative" 
+                       href="#" 
+                       id="messagesDropdown" 
+                       role="button" 
+                       data-bs-toggle="dropdown" 
+                       aria-expanded="false">
+                        <i class="bi bi-chat-dots"></i> Messages
+                        <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" 
+                              id="unreadBadge" 
+                              style="display: none;">
+                            0
+                        </span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" 
+                        aria-labelledby="messagesDropdown" 
+                        style="width: 350px; max-height: 400px; overflow-y: auto;">
+                        <li>
+                            <h6 class="dropdown-header d-flex justify-content-between align-items-center">
+                                <span>Recent Conversations</span>
+                                <a href="{% url 'information:chat_history' %}" 
+                                   class="btn btn-sm btn-link text-decoration-none">
+                                    View All
+                                </a>
+                            </h6>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        
+                        <!-- Messages will be loaded here dynamically -->
+                        <div id="navMessagesContainer">
+                            <li class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </li>
+                        </div>
+                        
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-center text-primary" 
+                               href="{% url 'information:chat_history' %}">
+                                <i class="bi bi-arrow-right-circle"></i> View All Messages
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                    {% elif user.is_teacher %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'users:teacher_dashboard' %}">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'monitoring:class_list' %}">My Classes</a>
+                        </li>
+                    {% endif %}
+                    
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" data-bs-toggle="dropdown">
+                            {{ user.get_full_name }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'users:logout' %}">Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+</nav>

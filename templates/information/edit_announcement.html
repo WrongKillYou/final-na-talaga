@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit Announcement{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-pencil-square"></i> Edit Announcement
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- Title -->
+                        <div class="mb-3">
+                            <label for="{{ form.title.id_for_label }}" class="form-label">
+                                Title <span class="text-danger">*</span>
+                            </label>
+                            {{ form.title }}
+                            {% if form.title.errors %}
+                                <div class="text-danger small">{{ form.title.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Content -->
+                        <div class="mb-3">
+                            <label for="{{ form.content.id_for_label }}" class="form-label">
+                                Content <span class="text-danger">*</span>
+                            </label>
+                            {{ form.content }}
+                            {% if form.content.errors %}
+                                <div class="text-danger small">{{ form.content.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Current Image -->
+                        {% if announcement.image %}
+                        <div class="mb-3">
+                            <label class="form-label">Current Image</label>
+                            <div class="border rounded p-2">
+                                <img src="{{ announcement.image.url }}" 
+                                     alt="Current image" 
+                                     class="img-thumbnail" 
+                                     style="max-height: 200px;">
+                                <p class="small text-muted mb-0 mt-2">
+                                    Upload a new image to replace this one
+                                </p>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- New Image -->
+                        <div class="mb-3">
+                            <label for="{{ form.image.id_for_label }}" class="form-label">
+                                {% if announcement.image %}Replace Image{% else %}Upload Image{% endif %}
+                            </label>
+                            {{ form.image }}
+                            {% if form.image.errors %}
+                                <div class="text-danger small">{{ form.image.errors }}</div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Optional. Supported formats: JPG, PNG, GIF (Max 5MB)
+                            </small>
+                        </div>
+
+                        <!-- Target Audience -->
+                        <div class="mb-3">
+                            <label for="{{ form.target_audience.id_for_label }}" class="form-label">
+                                Target Audience <span class="text-danger">*</span>
+                            </label>
+                            {{ form.target_audience }}
+                            {% if form.target_audience.errors %}
+                                <div class="text-danger small">{{ form.target_audience.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Important Checkbox -->
+                        <div class="mb-3 form-check">
+                            {{ form.is_important }}
+                            <label class="form-check-label" for="{{ form.is_important.id_for_label }}">
+                                Mark as Important
+                            </label>
+                        </div>
+
+                        <!-- Active Checkbox -->
+                        <div class="mb-3 form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                Published (Active)
+                            </label>
+                            <small class="form-text text-muted d-block">
+                                Uncheck to save as draft
+                            </small>
+                        </div>
+
+                        <!-- Buttons -->
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="bi bi-check-circle"></i> Update Announcement
+                                </button>
+                                <a href="{% url 'information:announcement_detail' announcement.id %}" 
+                                   class="btn btn-secondary">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </a>
+                            </div>
+                            <button type="button" 
+                                    class="btn btn-outline-danger" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteModal">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this announcement?</p>
+                <p class="text-muted mb-0">
+                    <strong>{{ announcement.title }}</strong>
+                </p>
+                <p class="text-danger small mb-0">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancel
+                </button>
+                <form method="post" action="{% url 'information:announcement_delete' announcement.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
