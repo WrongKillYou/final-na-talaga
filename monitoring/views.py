@@ -127,13 +127,15 @@ def teacher_dashboard(request):
 @login_required
 @teacher_required
 def class_list(request):
-    """List all classes taught by teacher"""
+    """Display all classes assigned to the logged-in teacher"""
     teacher = request.user.teacher_profile
-    classes = Class.objects.filter(teacher=teacher).prefetch_related('enrollments')
+    
+    classes = Class.objects.filter(teacher=teacher).annotate(
+        student_count= Count('enrollments')
+    ).order_by('subject')
     
     context = {
-        'classes': classes,
-        'teacher': teacher,
+        'classes': classes
     }
     return render(request, 'monitoring/class_list.html', context)
 
@@ -141,16 +143,38 @@ def class_list(request):
 @login_required
 @teacher_required
 def class_detail(request, class_id):
-    """View class details"""
-    teacher = request.user.teacher_profile
-    class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
+    """Show details of a class and enrolled students"""
+    class_obj = get_object_or_404(Class, id=class_id, teacher=request.user.teacher_profile)
+    
+    # Get all enrolled students
+    enrollments = Enrollment.objects.filter(class_obj=class_obj).select_related('student')
+    students = []
+    for e in enrollments:
+        student = e.student
+        # Optional: compute current average grade for display
+        grades = GradeItem.objects.filter(student=student, class_obj=class_obj)
+        if grades.exists():
+            student.average = round(sum([g.percentage_score() for g in grades]) / grades.count(), 2)
+        else:
+            student.average = None
+        students.append(student)
+
+    # Class statistics
+    total_students = len(students)
+    average_grade = round(sum([s.average for s in students if s.average is not None]) / total_students, 1) if total_students else 0
+    passing_count = len([s for s in students if s.average is not None and s.average >= 75])
+    failing_count = len([s for s in students if s.average is not None and s.average < 75])
     
     context = {
         'class_obj': class_obj,
-        'teacher': teacher,
+        'students': students,
+        'total_students': total_students,
+        'average_grade': average_grade,
+        'passing_count': passing_count,
+        'failing_count': failing_count,
     }
+    
     return render(request, 'monitoring/class_detail.html', context)
-
 
 @login_required
 @role_required('teacher')
@@ -233,24 +257,35 @@ def student_grades(request, student_id):
 @login_required
 @teacher_required
 def grade_input(request, class_id):
-    """Upload grades via Excel file"""
+    """Input grades for students in a class"""
     teacher = request.user.teacher_profile
     class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
-    
-    if request.method == 'POST':
-        # Handle file upload and processing
-        # This would use openpyxl to parse Excel file
-        # Similar to your first project's implementation
-        
-        messages.success(request, 'Grades uploaded successfully!')
-        return redirect('monitoring:class_grades', class_id=class_id)
-    
+
+    # Current quarter from GET or default to 1
+    current_quarter = int(request.GET.get('quarter', 1))
+
+    # Get enrolled students
+    enrollments = Enrollment.objects.filter(class_obj=class_obj).select_related('student')
+    students = []
+    for e in enrollments:
+        student = e.student
+
+        # Attach current grade if exists
+        final_grade, created = FinalGrade.objects.get_or_create(
+            student=student,
+            class_obj=class_obj,
+            quarter=current_quarter
+        )
+        student.current_grade = final_grade
+        students.append(student)
+
     context = {
         'class_obj': class_obj,
-        'teacher': teacher,
+        'students': students,
+        'current_quarter': current_quarter,
     }
-    return render(request, 'monitoring/grade_input.html', context)
 
+    return render(request, 'monitoring/grade_input.html', context)
 
 @login_required
 @teacher_required
@@ -285,465 +320,128 @@ def edit_grade(request, grade_id):
     }
     return render(request, 'monitoring/edit_grade.html', context)
 
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from .models import Class, Enrollment, Child, GradeItem, FinalGrade
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from .models import Class, Enrollment, GradeItem, FinalGrade
+from users.models import Child
+from openpyxl import Workbook, load_workbook
+from django.http import HttpResponse
+
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from users.models import Child, Teacher
+from .models import Class, Enrollment
+
 @login_required
-@teacher_required
-def download_grade_template(request, class_id):
-    """Download Excel template for grade entry"""
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    
+def grade_input(request, class_id):
     teacher = request.user.teacher_profile
     class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
     
-    # Get enrolled students
+    enrollments = Enrollment.objects.filter(class_obj=class_obj).select_related('student')
+    students = [en.student for en in enrollments]
+
+    current_quarter = int(request.GET.get('quarter', 1))
+
+    context = {
+        'class_obj': class_obj,
+        'students': students,
+        'current_quarter': current_quarter,
+        'quarters': [1, 2, 3, 4],
+    }
+    return render(request, 'monitoring/grade_input.html', context)
+
+
+
+@login_required
+@teacher_required
+def download_grade_template(request, class_id):
+    teacher = request.user.teacher_profile
+    class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
+    
     enrollments = Enrollment.objects.filter(class_obj=class_obj).select_related('student')
     
-    # Create workbook
     wb = Workbook()
     ws = wb.active
     ws.title = "Grade Template"
     
-    # Define styles
-    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF", size=12)
-    instruction_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-    border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    center_align = Alignment(horizontal='center', vertical='center')
-    
-    # Class Information Section
-    ws['A1'] = f"Grade Template - {class_obj.class_name}"
-    ws['A1'].font = Font(bold=True, size=14)
-    ws.merge_cells('A1:H1')
-    
-    ws['A2'] = f"Subject: {class_obj.subject}"
-    ws['A2'].font = Font(bold=True, size=11)
-    ws.merge_cells('A2:H2')
-    
-    ws['A3'] = f"Teacher: {teacher.user.get_full_name()}"
-    ws.merge_cells('A3:H3')
-    
-    # Instructions
-    ws['A4'] = "Instructions:"
-    ws['A4'].font = Font(bold=True, color="FF0000")
-    
-    ws['A5'] = "1. Do NOT modify the LRN, Student Name, or Quarter columns"
-    ws['A5'].fill = instruction_fill
-    ws.merge_cells('A5:H5')
-    
-    ws['A6'] = "2. Enter Component (WW/PT/QA), Score, and Highest Possible Score"
-    ws['A6'].fill = instruction_fill
-    ws.merge_cells('A6:H6')
-    
-    ws['A7'] = "3. Component codes: WW = Written Work, PT = Performance Task, QA = Quarterly Assessment"
-    ws['A7'].fill = instruction_fill
-    ws.merge_cells('A7:H7')
-    
-    ws['A8'] = "4. You can add multiple rows per student per component (e.g., Quiz 1, Quiz 2, etc.)"
-    ws['A8'].fill = instruction_fill
-    ws.merge_cells('A8:H8')
-    
-    ws['A9'] = "5. Save as Excel file (.xlsx) and upload through the system"
-    ws['A9'].fill = instruction_fill
-    ws.merge_cells('A9:H9')
-    
-    # Empty row
-    ws.row_dimensions[10].height = 5
-    
     # Headers
-    headers = ['LRN', 'Student Name', 'Quarter', 'Component', 'Score', 'Highest Possible', 'Final Grade', 'Percentage']
-    header_row = 11
+    headers = ['LRN', 'Student Name', 'Quarter', 'Written Work', 'Performance Task', 'Quarterly Exam']
+    ws.append(headers)
     
-    for col_num, header in enumerate(headers, 1):
-        cell = ws.cell(row=header_row, column=col_num)
-        cell.value = header
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = center_align
-        cell.border = border
-    
-    # Column widths
-    column_widths = {
-        'A': 15,  # LRN
-        'B': 30,  # Student Name
-        'C': 10,  # Quarter
-        'D': 15,  # Component
-        'E': 12,  # Score
-        'F': 18,  # Highest Possible
-        'G': 15,  # Final Grade
-        'H': 15,  # Percentage
-    }
-    
-    for col_letter, width in column_widths.items():
-        ws.column_dimensions[col_letter].width = width
-    
-    # Add student data template for all quarters
-    data_row = header_row + 1
-    quarters = [1, 2, 3, 4]
-    components = ['WW', 'PT', 'QA']
-    
+    # Fill with student info
     for enrollment in enrollments:
         student = enrollment.student
-        lrn = student.lrn if hasattr(student, 'lrn') else student.id
-        
-        for quarter in quarters:
-            # Get existing grade items if any
-            grade_items = GradeItem.objects.filter(
-                student=student,
-                class_obj=class_obj,
-                quarter=quarter
-            ).order_by('component', 'id')
-            
-            if grade_items.exists():
-                # Add existing grade items
-                for item in grade_items:
-                    # LRN
-                    cell = ws.cell(row=data_row, column=1)
-                    cell.value = lrn
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Student Name
-                    cell = ws.cell(row=data_row, column=2)
-                    cell.value = student.get_full_name()
-                    cell.border = border
-                    
-                    # Quarter
-                    cell = ws.cell(row=data_row, column=3)
-                    cell.value = quarter
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Component
-                    cell = ws.cell(row=data_row, column=4)
-                    cell.value = item.component
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Score
-                    cell = ws.cell(row=data_row, column=5)
-                    cell.value = item.score
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Highest Possible Score
-                    cell = ws.cell(row=data_row, column=6)
-                    cell.value = item.highest_possible_score
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Final Grade (computed, read-only)
-                    cell = ws.cell(row=data_row, column=7)
-                    try:
-                        final = FinalGrade.objects.get(student=student, class_obj=class_obj, quarter=quarter)
-                        cell.value = final.final_grade
-                    except FinalGrade.DoesNotExist:
-                        cell.value = ''
-                    cell.border = border
-                    cell.alignment = center_align
-                    cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-                    
-                    # Percentage
-                    cell = ws.cell(row=data_row, column=8)
-                    cell.value = round(item.percentage_score(), 2)
-                    cell.border = border
-                    cell.alignment = center_align
-                    cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-                    
-                    data_row += 1
-            else:
-                # Add empty template rows (one for each component)
-                for component in components:
-                    # LRN
-                    cell = ws.cell(row=data_row, column=1)
-                    cell.value = lrn
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Student Name
-                    cell = ws.cell(row=data_row, column=2)
-                    cell.value = student.get_full_name()
-                    cell.border = border
-                    
-                    # Quarter
-                    cell = ws.cell(row=data_row, column=3)
-                    cell.value = quarter
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Component
-                    cell = ws.cell(row=data_row, column=4)
-                    cell.value = component
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Score (empty for user to fill)
-                    cell = ws.cell(row=data_row, column=5)
-                    cell.value = ''
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Highest Possible Score (empty for user to fill)
-                    cell = ws.cell(row=data_row, column=6)
-                    cell.value = ''
-                    cell.border = border
-                    cell.alignment = center_align
-                    
-                    # Final Grade (computed, read-only)
-                    cell = ws.cell(row=data_row, column=7)
-                    cell.value = ''
-                    cell.border = border
-                    cell.alignment = center_align
-                    cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-                    
-                    # Percentage (read-only)
-                    cell = ws.cell(row=data_row, column=8)
-                    cell.value = ''
-                    cell.border = border
-                    cell.alignment = center_align
-                    cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-                    
-                    data_row += 1
+        ws.append([student.lrn, student.get_full_name(), '', '', '', ''])
     
-    # Freeze panes (freeze header row)
-    ws.freeze_panes = ws['A12']
-    
-    # Create response
+    # Response
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    response['Content-Disposition'] = f'attachment; filename="Grade_Template_{class_obj.class_name}_{class_obj.subject}.xlsx"'
-    
-    # Save workbook to response
+    response['Content-Disposition'] = f'attachment; filename="Grade_Template_{class_obj.class_name}.xlsx"'
     wb.save(response)
-    
     return response
 
 
 @login_required
 @teacher_required
 def bulk_upload_grades(request, class_id):
-    """Handle bulk upload of grades via Excel"""
-    from openpyxl import load_workbook
-    
     teacher = request.user.teacher_profile
     class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
     
     if request.method == 'POST' and request.FILES.get('grade_file'):
+        excel_file = request.FILES['grade_file']
         try:
-            excel_file = request.FILES['grade_file']
-            
-            # Load workbook
             wb = load_workbook(excel_file)
             ws = wb.active
             
             success_count = 0
-            error_count = 0
-            errors = []
-            updated_students = set()
-            
-            # Start from row 12 (after headers)
-            for row_num, row in enumerate(ws.iter_rows(min_row=12, values_only=True), start=12):
-                try:
-                    # Extract data
-                    lrn = str(row[0]).strip() if row[0] else None
-                    student_name = row[1]
-                    quarter = int(row[2]) if row[2] else None
-                    component = str(row[3]).strip().upper() if row[3] else None
-                    score = float(row[4]) if row[4] and str(row[4]).strip() else None
-                    highest_possible = float(row[5]) if row[5] and str(row[5]).strip() else None
-                    
-                    # Skip empty rows or rows without required data
-                    if not lrn or not quarter or not component or score is None or highest_possible is None:
-                        continue
-                    
-                    # Validate component
-                    if component not in ['WW', 'PT', 'QA']:
-                        errors.append(f"Row {row_num}: Invalid component '{component}'. Must be WW, PT, or QA")
-                        error_count += 1
-                        continue
-                    
-                    # Find student
-                    if hasattr(Child, 'lrn'):
-                        student = Child.objects.get(lrn=lrn)
-                    else:
-                        student = Child.objects.get(id=int(lrn))
-                    
-                    # Verify student is enrolled in this class
-                    if not Enrollment.objects.filter(class_obj=class_obj, student=student).exists():
-                        errors.append(f"Row {row_num}: Student {student_name} not enrolled in this class")
-                        error_count += 1
-                        continue
-                    
-                    # Create grade item (allow multiple items per component)
-                    grade_item = GradeItem.objects.create(
-                        student=student,
-                        class_obj=class_obj,
-                        quarter=quarter,
-                        component=component,
-                        score=score,
-                        highest_possible_score=highest_possible
-                    )
-                    
-                    success_count += 1
-                    updated_students.add((student.id, quarter))
-                    
-                except Child.DoesNotExist:
-                    errors.append(f"Row {row_num}: Student with LRN {lrn} not found")
-                    error_count += 1
-                except ValueError as e:
-                    errors.append(f"Row {row_num}: Invalid data format - {str(e)}")
-                    error_count += 1
-                except Exception as e:
-                    errors.append(f"Row {row_num}: {str(e)}")
-                    error_count += 1
-            
-            # Recompute final grades for all affected students
-            final_grades_computed = 0
-            for student_id, quarter in updated_students:
-                try:
-                    student = Child.objects.get(id=student_id)
-                    final_grade, created = FinalGrade.objects.get_or_create(
-                        student=student,
-                        class_obj=class_obj,
-                        quarter=quarter
-                    )
-                    final_grade.compute_final_grade()
-                    final_grades_computed += 1
-                except Exception as e:
-                    errors.append(f"Error computing final grade for student {student_id}, Q{quarter}: {str(e)}")
-            
-            # Show results
-            if success_count > 0:
-                messages.success(request, f'Successfully uploaded {success_count} grade item(s). Computed {final_grades_computed} final grade(s).')
-            
-            if error_count > 0:
-                error_message = f'{error_count} error(s) occurred. '
-                if len(errors) <= 5:
-                    error_message += ' '.join(errors)
-                else:
-                    error_message += ' '.join(errors[:5]) + f' ... and {len(errors) - 5} more errors.'
-                messages.warning(request, error_message)
-            
-            if success_count == 0 and error_count == 0:
-                messages.info(request, 'No grades were found in the file.')
-            
-        except Exception as e:
-            messages.error(request, f'Error processing file: {str(e)}')
-    else:
-        messages.error(request, 'No file was uploaded.')
-    
-    return redirect('monitoring:grade_input', class_id=class_id)
-
-@login_required
-@teacher_required
-def bulk_upload_grades(request, class_id):
-    """Handle bulk upload of grades via Excel"""
-    from openpyxl import load_workbook
-    
-    teacher = request.user.teacher_profile
-    class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
-    
-    if request.method == 'POST' and request.FILES.get('grade_file'):
-        try:
-            excel_file = request.FILES['grade_file']
-            
-            # Load workbook
-            wb = load_workbook(excel_file)
-            ws = wb.active
-            
-            success_count = 0
-            error_count = 0
             errors = []
             
-            # Start from row 12 (after headers)
-            for row_num, row in enumerate(ws.iter_rows(min_row=12, values_only=True), start=12):
+            for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
                 try:
-                    # Extract data
-                    lrn = str(row[0]).strip() if row[0] else None
-                    student_name = row[1]
-                    quarter = int(row[2]) if row[2] else None
-                    written_work = float(row[3]) if row[3] and str(row[3]).strip() else None
-                    performance_task = float(row[4]) if row[4] and str(row[4]).strip() else None
-                    quarterly_exam = float(row[5]) if row[5] and str(row[5]).strip() else None
-                    
-                    # Skip empty rows
+                    lrn, name, quarter, ww, pt, qe = row
                     if not lrn or not quarter:
                         continue
-                    
-                    # Find student
-                    if hasattr(Child, 'lrn'):
-                        student = Child.objects.get(lrn=lrn)
-                    else:
-                        student = Child.objects.get(id=int(lrn))
-                    
-                    # Verify student is enrolled in this class
-                    if not Enrollment.objects.filter(class_obj=class_obj, student=student).exists():
-                        errors.append(f"Row {row_num}: Student {student_name} not enrolled in this class")
-                        error_count += 1
+                    student = Child.objects.get(lrn=lrn)
+                    if not Enrollment.objects.filter(student=student, class_obj=class_obj).exists():
+                        errors.append(f"Row {row_num}: {student.get_full_name()} not enrolled")
                         continue
                     
-                    # Get or create grade
                     grade, created = FinalGrade.objects.get_or_create(
                         student=student,
                         class_obj=class_obj,
-                        quarter=quarter,
-                        defaults={
-                            'written_work': written_work,
-                            'performance_task': performance_task,
-                            'quarterly_exam': quarterly_exam,
-                        }
+                        quarter=int(quarter)
                     )
-                    
-                    # Update if not created
-                    if not created:
-                        if written_work is not None:
-                            grade.written_work = written_work
-                        if performance_task is not None:
-                            grade.performance_task = performance_task
-                        if quarterly_exam is not None:
-                            grade.quarterly_exam = quarterly_exam
-                    
-                    # Compute final grade
+                    grade.written_work = float(ww or 0)
+                    grade.performance_task = float(pt or 0)
+                    grade.quarterly_exam = float(qe or 0)
                     grade.compute_final_grade()
-                    
                     success_count += 1
-                    
                 except Child.DoesNotExist:
                     errors.append(f"Row {row_num}: Student with LRN {lrn} not found")
-                    error_count += 1
-                except ValueError as e:
-                    errors.append(f"Row {row_num}: Invalid data format - {str(e)}")
-                    error_count += 1
                 except Exception as e:
                     errors.append(f"Row {row_num}: {str(e)}")
-                    error_count += 1
             
-            # Show results
-            if success_count > 0:
-                messages.success(request, f'Successfully uploaded {success_count} grade(s).')
-            
-            if error_count > 0:
-                error_message = f'{error_count} error(s) occurred. '
-                if len(errors) <= 5:
-                    error_message += ' '.join(errors)
-                else:
-                    error_message += ' '.join(errors[:5]) + f' ... and {len(errors) - 5} more errors.'
-                messages.warning(request, error_message)
-            
-            if success_count == 0 and error_count == 0:
-                messages.info(request, 'No grades were found in the file.')
-            
+            messages.success(request, f"Uploaded grades for {success_count} student(s).")
+            if errors:
+                messages.warning(request, f"Errors: {'; '.join(errors[:5])}{'...' if len(errors) > 5 else ''}")
         except Exception as e:
-            messages.error(request, f'Error processing file: {str(e)}')
+            messages.error(request, f"Error processing file: {str(e)}")
     else:
-        messages.error(request, 'No file was uploaded.')
+        messages.error(request, "No file uploaded.")
     
-    return redirect('monitoring:grade_input', class_id=class_id)  
+    return redirect('monitoring:grade_input', class_id=class_id)
+
 
 
 # ========================================
