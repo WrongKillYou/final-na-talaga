@@ -2,7 +2,7 @@
 # URL Configuration for INFORMATION App - Unified Chat System
 
 from django.urls import path
-from . import views
+from . import views, api_views
 
 app_name = 'information'
 
@@ -100,6 +100,10 @@ urlpatterns = [
     path('conversation/<int:conversation_id>/close/', 
          views.close_conversation, 
          name='close_conversation'),
+
+     path('api/children/', api_views.parent_children_list_api, name='api_children_list'),
+    path('api/chat/create/', api_views.create_conversation_api, name='api_create_conversation'),
+    path('api/chat/recent-conversations/', api_views.recent_conversations_api, name='api_recent_conversations'),
     
     # ========================================
     # NOTIFICATIONS

@@ -48,6 +48,27 @@ def recent_announcements_api(request):
 
 @login_required
 @require_http_methods(["GET"])
+def parent_children_list_api(request):
+    """Get parent's children for chatbot child selection"""
+    if request.user.role != 'parent':
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    parent = request.user.parent_profile
+    children = parent.children.all()
+    
+    return JsonResponse([
+        {
+            'id': child.id,
+            'name': child.get_full_name(),
+            'grade_level': child.grade_level,
+            'section': child.section
+        }
+        for child in children
+    ], safe=False)
+
+
+@login_required
+@require_http_methods(["GET"])
 def upcoming_events_api(request):
     """API endpoint to get upcoming events for chatbot"""
     

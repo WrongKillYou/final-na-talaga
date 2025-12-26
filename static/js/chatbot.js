@@ -5,7 +5,11 @@ class ChatbotWidget {
     constructor() {
         this.isOpen = false;
         this.messages = [];
-        this.waitingForTeacherContact = false;
+        this.waitingForTeacherSelection = false;
+        this.waitingForChildSelection = false;
+        this.pendingMessage = null;
+        this.availableChildren = [];
+        this.selectedChild = null;
         this.init();
     }
 
@@ -13,6 +17,7 @@ class ChatbotWidget {
         this.createChatbotHTML();
         this.attachEventListeners();
         this.showWelcomeMessage();
+        this.loadChildren();
     }
 
     createChatbotHTML() {
@@ -49,9 +54,8 @@ class ChatbotWidget {
                         <input type="text" 
                                class="chatbot-input" 
                                id="chatbotInput" 
-                               placeholder="Type your message..."
-                               disabled>
-                        <button class="chatbot-send-btn" id="chatbotSend" disabled>
+                               placeholder="Type your message...">
+                        <button class="chatbot-send-btn" id="chatbotSend">
                             <i class="bi bi-send-fill"></i>
                         </button>
                     </div>
@@ -82,6 +86,11 @@ class ChatbotWidget {
         document.getElementById('chatbotMessages').addEventListener('click', (e) => {
             if (e.target.classList.contains('quick-reply-btn')) {
                 this.handleQuickReply(e.target.dataset.action, e.target.textContent);
+            }
+            
+            // Handle child selection
+            if (e.target.classList.contains('child-select-btn')) {
+                this.selectChild(e.target.dataset.childId, e.target.dataset.childName);
             }
         });
     }
@@ -173,7 +182,10 @@ class ChatbotWidget {
 
     createQuickReplies(buttons) {
         const buttonsHTML = buttons.map(btn => `
-            <button class="quick-reply-btn" data-action="${btn.action}">
+            <button class="quick-reply-btn ${btn.class || ''}" 
+                    data-action="${btn.action}"
+                    ${btn.childId ? `data-child-id="${btn.childId}"` : ''}
+                    ${btn.childName ? `data-child-name="${btn.childName}"` : ''}>
                 <i class="bi ${btn.icon || 'bi-arrow-right'}"></i>
                 ${btn.text}
             </button>
@@ -258,30 +270,8 @@ class ChatbotWidget {
                 buttons: this.getBackButton()
             },
             'contact': {
-                text: `👨‍🏫 Would you like to start a conversation with your child's teacher?<br><br>
-                       This will open a direct chat where you can discuss:<br>
-                       • Your child's progress<br>
-                       • Attendance concerns<br>
-                       • Schedule questions<br>
-                       • Any other concerns`,
-                buttons: [
-                    { action: 'start_chat', text: '✅ Yes, Contact Teacher', icon: 'bi-chat-text' },
-                    { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
-                ]
-            },
-            'start_chat': {
-                text: `✅ Great! I'm redirecting you to start a conversation with your teacher.<br><br>
-                       <a href="/information/chat/start/" class="message-action-btn">
-                           <i class="bi bi-chat-text-fill"></i> Open Teacher Chat
-                       </a><br><br>
-                       You can also view your message history anytime.`,
-                buttons: [
-                    { action: 'view_history', text: '📜 View Message History', icon: 'bi-clock-history' },
-                    { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
-                ]
-            },
-            'view_history': {
-                text: `Opening your message history...`,
+                text: `👨‍🏫 I can help you start a conversation with a teacher!<br><br>
+                       Would you like to specify which child this is about?`,
                 buttons: null
             },
             'back': {
@@ -292,15 +282,153 @@ class ChatbotWidget {
 
         const response = responses[action];
         if (response) {
-            this.addBotMessage(response.text, response.buttons);
-
-            // Handle special actions
-            if (action === 'view_history') {
-                setTimeout(() => {
-                    window.location.href = '/information/chat/history/';
-                }, 1500);
+            if (action === 'contact') {
+                this.showChildSelection();
+            } else {
+                this.addBotMessage(response.text, response.buttons);
             }
         }
+    }
+
+    loadChildren() {
+        // Fetch parent's children
+        fetch('/information/api/children/')
+            .then(response => response.json())
+            .then(data => {
+                this.availableChildren = data || [];
+            })
+            .catch(error => {
+                console.error('Error loading children:', error);
+                this.availableChildren = [];
+            });
+    }
+
+    showChildSelection() {
+        if (this.availableChildren.length === 0) {
+            // No children, proceed directly to create conversation
+            this.addBotMessage(
+                "I'll help you start a conversation with a teacher. You can type your message below, or click the button to open the chat window.",
+                [
+                    { action: 'open_chat', text: '💬 Open Chat Window', icon: 'bi-chat-text' },
+                    { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
+                ]
+            );
+            this.waitingForTeacherSelection = true;
+            return;
+        }
+
+        const childButtons = this.availableChildren.map(child => ({
+            action: 'select_child',
+            text: `${child.name}`,
+            icon: 'bi-person-circle',
+            class: 'child-select-btn',
+            childId: child.id,
+            childName: child.name
+        }));
+
+        childButtons.push({ 
+            action: 'no_child', 
+            text: 'General Question (no specific child)', 
+            icon: 'bi-chat-dots' 
+        });
+        childButtons.push({ 
+            action: 'back', 
+            text: '← Back to Menu', 
+            icon: 'bi-arrow-left' 
+        });
+
+        this.addBotMessage(
+            "👶 Please select which child this is about:",
+            childButtons
+        );
+    }
+
+    selectChild(childId, childName) {
+        this.addUserMessage(`About ${childName}`);
+        this.selectedChild = childId;
+        this.showMessagePrompt(childName);
+    }
+
+    showMessagePrompt(childName) {
+        this.waitingForTeacherSelection = true;
+        
+        const message = childName 
+            ? `Great! You can now type your question or concern about ${childName}, or click the button below to open the chat window.`
+            : `Great! You can now type your question or concern, or click the button below to open the chat window.`;
+        
+        this.addBotMessage(
+            message,
+            [
+                { action: 'open_chat', text: '💬 Open Chat Window', icon: 'bi-chat-text' },
+                { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
+            ]
+        );
+    }
+
+    createConversationWithMessage(message) {
+        this.addBotMessage(
+            `Creating conversation and sending your message...`,
+            null
+        );
+
+        // Prepare request data
+        const requestData = {
+            initial_message: message,
+            subject: message.substring(0, 100) // First 100 chars as subject
+        };
+
+        // Add child_id if selected
+        if (this.selectedChild) {
+            requestData.child_id = this.selectedChild;
+        }
+
+        // Send the message via API
+        fetch('/information/api/chat/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCSRFToken()
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.addBotMessage(
+                    `✅ Your message has been sent! ${data.assigned ? 'A teacher has been assigned to help you.' : 'A teacher will respond to you shortly.'}<br><br>
+                    Redirecting to your conversation...`,
+                    null
+                );
+                setTimeout(() => {
+                    window.location.href = `/information/chat/conversation/${data.conversation_id}/`;
+                }, 2000);
+            } else if (data.conversation_id) {
+                // Already has active conversation
+                this.addBotMessage(
+                    `You already have an active conversation. Redirecting you there...`,
+                    null
+                );
+                setTimeout(() => {
+                    window.location.href = `/information/chat/conversation/${data.conversation_id}/`;
+                }, 1500);
+            } else {
+                this.addBotMessage(
+                    `Sorry, there was an error: ${data.error || 'Unknown error'}. Please try again.`,
+                    this.getBackButton()
+                );
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            this.addBotMessage(
+                "Sorry, there was an error. Please try again.",
+                this.getBackButton()
+            );
+        });
+
+        this.pendingMessage = null;
+        this.waitingForTeacherSelection = false;
+        this.selectedChild = null;
     }
 
     getBackButton() {
@@ -313,18 +441,70 @@ class ChatbotWidget {
         const input = document.getElementById('chatbotInput');
         const message = input.value.trim();
 
-        if (message) {
-            this.addUserMessage(message);
-            input.value = '';
+        if (!message) return;
 
-            // Process custom message (you can add AI integration here)
+        this.addUserMessage(message);
+        input.value = '';
+
+        // Check if waiting for teacher contact
+        if (this.waitingForTeacherSelection) {
+            this.pendingMessage = message;
+            this.createConversationWithMessage(message);
+            return;
+        }
+
+        // Try to match with FAQ keywords (simple matching)
+        const lowerMessage = message.toLowerCase();
+        let matchedAction = null;
+
+        if (lowerMessage.includes('hour') || lowerMessage.includes('time') || lowerMessage.includes('open') || lowerMessage.includes('close')) {
+            matchedAction = 'hours';
+        } else if (lowerMessage.includes('enroll') || lowerMessage.includes('admission') || lowerMessage.includes('register')) {
+            matchedAction = 'enrollment';
+        } else if (lowerMessage.includes('curriculum') || lowerMessage.includes('program') || lowerMessage.includes('learn') || lowerMessage.includes('teach')) {
+            matchedAction = 'curriculum';
+        } else if (lowerMessage.includes('fee') || lowerMessage.includes('tuition') || lowerMessage.includes('payment') || lowerMessage.includes('cost') || lowerMessage.includes('price')) {
+            matchedAction = 'fees';
+        } else if (lowerMessage.includes('teacher') || lowerMessage.includes('talk') || lowerMessage.includes('speak') || lowerMessage.includes('contact')) {
+            matchedAction = 'contact';
+        }
+
+        if (matchedAction) {
+            // Found a match, respond with FAQ
+            setTimeout(() => {
+                this.processAction(matchedAction);
+            }, 500);
+        } else {
+            // No match found, offer to contact teacher
+            this.pendingMessage = message;
+            
             setTimeout(() => {
                 this.addBotMessage(
-                    "I'm sorry, I can only help with the menu options above. Please select one of the quick replies, or contact a teacher directly for specific questions.",
-                    this.getMainMenuButtons()
+                    `I understand you have a specific question. Would you like me to connect you with a teacher who can help?<br><br>
+                    Your message: "<em>${message}</em>"`,
+                    [
+                        { action: 'contact', text: '✅ Yes, Contact Teacher', icon: 'bi-chat-text' },
+                        { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
+                    ]
                 );
             }, 500);
         }
+    }
+
+    getCSRFToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
     }
 
     scrollToBottom() {
