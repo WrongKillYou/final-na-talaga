@@ -263,54 +263,77 @@ def parent_login(request):
     })
 
 
+from monitoring.models import Attendance
+
+def get_total_attendance(child):
+    """
+    Calculate total attendance of a child across all recorded days.
+    Returns dict with:
+        - attendance_rate (0-100 %)
+        - present_days
+        - total_days
+    """
+    attendance_records = Attendance.objects.filter(child=child)
+
+    total_days = attendance_records.count()
+    present_days = attendance_records.filter(status='present').count()
+
+    attendance_rate = 0
+    if total_days > 0:
+        attendance_rate = round((present_days / total_days) * 100, 1)
+
+    return {
+        'attendance_rate': attendance_rate,
+        'present_days': present_days,
+        'total_days': total_days,
+    }
 @login_required
 @parent_required
 def parent_dashboard(request):
-    """Parent dashboard with children's competency progress"""
     parent = request.user.parent_profile
     children = parent.children.filter(is_active=True)
-    
-    current_quarter = get_current_quarter()
+
+    # Gather children data
     children_data = []
-    
     for child in children:
-        # Get competency statistics for current quarter
-        total_competencies = Domain.objects.aggregate(
-            total=Count('competencies')
-        )['total']
-        
-        assessed_competencies = QuarterlyCompetencyRecord.objects.filter(
-            child=child,
-            quarter=current_quarter
-        ).exclude(level__isnull=True).count()
-        
-        consistent_count = QuarterlyCompetencyRecord.objects.filter(
-            child=child,
-            quarter=current_quarter,
-            level='C'
-        ).count()
-        
-        # Calculate competency progress percentage
-        competency_progress = 0
-        if total_competencies > 0:
-            competency_progress = round((consistent_count / total_competencies) * 100, 1)
-        
-        # Get attendance stats (last 30 days)
-        thirty_days_ago = date.today() - timedelta(days=30)
-        attendance_stats = get_attendance_stats(child, thirty_days_ago, date.today())
-        
+        # Get final markings per quarter
+        quarterly_records = {}
+        for q in range(1, 5):
+            total_competencies = Domain.objects.aggregate(total=Count('competencies'))['total'] or 0
+            assessed_competencies = QuarterlyCompetencyRecord.objects.filter(
+                child=child,
+                quarter=q
+            ).exclude(level__isnull=True).count()
+
+            consistent_count = QuarterlyCompetencyRecord.objects.filter(
+                child=child,
+                quarter=q,
+                level='C'
+            ).count()
+
+            competency_progress = 0
+            if total_competencies > 0:
+                competency_progress = round((consistent_count / total_competencies) * 100, 1)
+
+            quarterly_records[q] = {
+                'total_competencies': total_competencies,
+                'assessed_competencies': assessed_competencies,
+                'final_markings': consistent_count,
+                'competency_progress': competency_progress,
+            }
+
+        # Get total attendance
+        attendance_stats = get_total_attendance(child)
+
         children_data.append({
             'child': child,
-            'total_competencies': total_competencies,
-            'assessed_competencies': assessed_competencies,
-            'consistent_count': consistent_count,
-            'competency_progress': competency_progress,
+            'quarterly_records': quarterly_records,
             'attendance_rate': attendance_stats['attendance_rate'],
             'present_days': attendance_stats['present_days'],
             'total_days': attendance_stats['total_days'],
         })
-    
-    # Get upcoming events
+
+    # Upcoming events
     events = Event.objects.filter(
         start_date__gte=date.today(),
         is_active=True,
@@ -318,24 +341,23 @@ def parent_dashboard(request):
     ).filter(
         Q(target_audience='all') | Q(target_audience__icontains='parent')
     ).order_by('start_date')[:4]
-    
-    # Get recent announcements
+
+    # Recent announcements
     announcements = Announcement.objects.filter(
         is_active=True,
         publish_date__lte=timezone.now()
     ).filter(
         Q(target_audience='all') | Q(target_audience='parents')
     ).select_related('teacher__user').order_by('-publish_date')[:2]
-    
+
     context = {
         'parent': parent,
         'children_data': children_data,
         'announcements': announcements,
         'events': events,
-        'current_quarter': current_quarter,
     }
-    
     return render(request, 'users/parent_dashboard.html', context)
+
 
 
 # ========================================
@@ -393,7 +415,7 @@ def child_detail(request, child_id):
     )
 
     enrollment = Enrollment.objects.filter(
-        student=child,
+        child=child,
         is_active=True
     ).select_related('class_obj__teacher__user').first()
 
