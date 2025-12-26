@@ -22,18 +22,21 @@ from .forms import AnnouncementForm, EventForm  # Assume you'll create these
 # ========================================
 # EVENTS
 # ========================================
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from .models import Event
+from datetime import date
 
 @login_required
 def event_list(request):
-    """List all upcoming events"""
-    from datetime import date
-    
-    # Get active, non-cancelled events
+    """List all upcoming one-time events"""
+    # Get active, non-cancelled events that start today or later
     events = Event.objects.filter(
         is_active=True,
         is_cancelled=False,
-        start_date__gte=date.today()
-    ).order_by('start_date')
+        start_datetime__date__gte=date.today()
+    ).order_by('start_datetime')
     
     # Filter by target audience if needed
     if request.user.role == 'parent':
@@ -51,30 +54,59 @@ def event_list(request):
     return render(request, 'information/event_list.html', context)
 
 
+
 @login_required
 def event_detail(request, event_id):
-    """View event details"""
+    """Show full details of an event."""
     event = get_object_or_404(Event, id=event_id, is_active=True)
-    
-    context = {
-        'event': event,
-    }
-    return render(request, 'information/event_detail.html', context)
-
+    return render(request, 'information/event_detail.html', {'event': event})
 
 @login_required
 @teacher_required
+def event_edit(request, event_id):
+    """Edit an event."""
+    event = get_object_or_404(Event, id=event_id, is_active=True)
+    if request.method == 'POST':
+        form = EventForm(request.POST, request.FILES, instance=event)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Event updated successfully!')
+            return redirect('users:teacher_dashboard')
+    else:
+        form = EventForm(instance=event)
+    return render(request, 'information/event_form.html', {'form': form, 'event': event})
+
+@login_required
+@teacher_required
+def event_delete(request, event_id):
+    """Soft delete an event."""
+    event = get_object_or_404(Event, id=event_id, is_active=True)
+    if request.method == 'POST':
+        event.is_active = False
+        event.save()
+        messages.success(request, 'Event deleted successfully!')
+        return redirect('users:teacher_dashboard')
+    return render(request, 'information/event_confirm_delete.html', {'event': event})
+
+
+
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from .forms import EventForm
+from .models import Event
+@login_required
+@teacher_required
 def create_event(request):
-    """Create new event (teachers only)"""
     teacher = request.user.teacher_profile
-    
+
     if request.method == 'POST':
         form = EventForm(request.POST, request.FILES)
         if form.is_valid():
             event = form.save(commit=False)
             event.created_by = teacher
             event.save()
-            
+
             # Log activity
             Activity.log_activity(
                 user=request.user,
@@ -83,17 +115,18 @@ def create_event(request):
                 related_id=event.id,
                 related_type='Event'
             )
-            
+
             messages.success(request, '✅ Event created successfully!')
-            return redirect('information:event_list')
+            return redirect('users:teacher_dashboard')
+        else:
+            messages.error(request, "⚠️ There was a problem with your submission. Please check the form.")
     else:
         form = EventForm()
-    
-    context = {
-        'form': form,
-        'teacher': teacher,
-    }
-    return render(request, 'information/create_event.html', context)
+
+    return render(request, 'information/create_event.html', {'form': form, 'teacher': teacher})
+
+
+
 
 
 @login_required
@@ -132,7 +165,7 @@ def delete_event(request, event_id):
         event.delete()
         
         messages.success(request, f'✅ Event "{event_title}" deleted successfully!')
-        return redirect('information:event_list')
+        return redirect('users:teacher_dashboard')
     
     return redirect('information:event_detail', event_id=event_id)
 
@@ -343,6 +376,40 @@ def delete_announcement(request, announcement_id):
         return redirect('information:announcement_list')
     
     return redirect('information:announcement_detail', announcement_id=announcement_id)
+
+
+
+@login_required
+@parent_required
+def parent_announcement_detail(request, pk):
+    announcement = get_object_or_404(
+        Announcement,
+        id=pk,
+        is_active=True
+    )
+
+    return render(
+        request,
+        'information/parent_announcement_detail.html',
+        {'announcement': announcement}
+    )
+
+
+@login_required
+@parent_required
+def parent_event_detail(request, pk):
+    event = get_object_or_404(
+        Event,
+        id=pk,
+        is_active=True
+    )
+
+    return render(
+        request,
+        'information/parent_event_detail.html',
+        {'event': event}
+    )
+
 
 
 # ========================================

@@ -3,6 +3,7 @@
 
 from django.urls import path
 from . import views
+from django.contrib.auth import views as auth_views
 
 app_name = 'users'
 
@@ -74,4 +75,13 @@ urlpatterns = [
     path('child/<int:child_id>/', 
          views.child_detail, 
          name='child_detail'),
+
+     path(
+        'password/change/',
+        auth_views.PasswordChangeView.as_view(
+            template_name='users/change_password.html',
+            success_url='/parent/profile/'
+        ),
+        name='change_password'
+    ),
 ]

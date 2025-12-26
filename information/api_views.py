@@ -6,7 +6,7 @@ from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta
 from django.utils.timesince import timesince
 from users import models
-from .models import Announcement, Event, ChatConversation, ConversationMessage, TeacherAvailability
+from .models import Announcement, Event, ChatConversation, ConversationMessage
 from users.models import Child
 import json
 

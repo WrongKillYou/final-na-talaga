@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Event{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <h3 class="mb-2">{{ event.title }}</h3>
+
+    <p class="text-muted">
+        <i class="bi bi-clock"></i>
+        {{ event.start_datetime|date:"M d, Y H:i" }}
+        {% if event.end_datetime %}
+            – {{ event.end_datetime|date:"M d, Y H:i" }}
+        {% endif %}
+    </p>
+
+    <hr>
+
+    <p>{{ event.description|linebreaks }}</p>
+
+    <a href="{% url 'users:parent_dashboard' %}"
+       class="btn btn-outline-secondary mt-3">
+        ← Back to Dashboard
+    </a>
+
+</div>
+{% endblock %}

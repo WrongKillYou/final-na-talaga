@@ -52,6 +52,20 @@ urlpatterns = [
     path('announcement/<int:announcement_id>/delete/', 
          views.delete_announcement, 
          name='delete_announcement'),
+
+
+
+
+     path(
+        'parent/announcement/<int:pk>/',
+        views.parent_announcement_detail,
+        name='parent_announcement_detail'
+    ),
+    path(
+        'parent/event/<int:pk>/',
+        views.parent_event_detail,
+        name='parent_event_detail'
+    ),
     
     # ========================================
     # CHATBOT (FAQ System)
@@ -106,4 +120,5 @@ urlpatterns = [
     path('api/notifications/count/', 
          views.get_unread_notifications_count, 
          name='get_unread_notifications_count'),
+
 ]

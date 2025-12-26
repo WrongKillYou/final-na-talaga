@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.db.models import Avg, Q, Count
 from datetime import datetime, timedelta, date
 from django.utils import timezone
+from django.utils.timezone import now
 
 from .models import Teacher, Parent, Child, User
 from .forms import (
@@ -146,77 +147,105 @@ def teacher_login(request):
     })
 
 
+from datetime import date
+from django.db.models import Q
+from information.models import Event, Announcement
+# other imports...
+
+from datetime import date, datetime
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
+from datetime import date
+from users.decorators import teacher_required
+
+
+
 @login_required
 @teacher_required
 def teacher_dashboard(request):
-    """Teacher dashboard with competency-based statistics"""
+    """Teacher dashboard showing classes, announcements, attendance, and categorized events."""
     teacher = request.user.teacher_profile
-    
-    # Get teacher's classes
-    classes = Class.objects.filter(
-        teacher=teacher,
-        is_active=True
-    ).annotate(
+
+    # -------------------------
+    # Teacher's active classes
+    # -------------------------
+    classes = Class.objects.filter(teacher=teacher, is_active=True).annotate(
         student_count=Count('enrollments')
     )
-    
-    # Calculate statistics
     total_classes = classes.count()
     total_students = sum(c.student_count for c in classes)
-    
-    # Count pending competency records (students without records for current quarter)
+
+    # -------------------------
+    # Pending competency records
+    # -------------------------
     current_quarter = get_current_quarter()
     pending_records = 0
-    
     for class_obj in classes:
-        enrolled_students = Enrollment.objects.filter(
-            class_obj=class_obj,
-            is_active=True
-        ).count()
-        
-        # Count how many students have at least one competency record for this quarter
+        enrolled_students = Enrollment.objects.filter(class_obj=class_obj, is_active=True).count()
         students_with_records = QuarterlyCompetencyRecord.objects.filter(
             child__enrollments__class_obj=class_obj,
             quarter=current_quarter
         ).values('child').distinct().count()
-        
-        pending_records += (enrolled_students - students_with_records)
-    
-    # Get teacher's announcements
-    try:
-        my_announcements = Announcement.objects.filter(
-            teacher=teacher,
-            is_active=True
-        ).order_by('-publish_date')[:5]
-        announcements_count = Announcement.objects.filter(
-            teacher=teacher
-        ).count()
-    except:
-        my_announcements = []
-        announcements_count = 0
-    
-    # Get today's classes (first 3 classes)
+        pending_records += max(0, enrolled_students - students_with_records)
+
+    # -------------------------
+    # Teacher's announcements
+    # -------------------------
+    my_announcements = Announcement.objects.filter(
+        teacher=teacher,
+        is_active=True
+    ).order_by('-publish_date')[:5]
+    announcements_count = Announcement.objects.filter(teacher=teacher).count()
+
+    # -------------------------
+    # Today's classes (for sidebar)
+    # -------------------------
     todays_classes = classes[:3] if classes.exists() else []
-    
+
+    # -------------------------
     # Recent activity
-    recent_activities = Activity.objects.filter(
-        user=request.user
-    ).order_by('-timestamp')[:5]
-    
-    # Count missing attendance for today
+    # -------------------------
+    recent_activities = Activity.objects.filter(user=request.user).order_by('-timestamp')[:5]
+
+    # -------------------------
+    # Missing attendance today
+    # -------------------------
     today = date.today()
     missing_attendance = 0
     for class_obj in classes:
-        enrolled_count = Enrollment.objects.filter(
-            class_obj=class_obj,
-            is_active=True
-        ).count()
-        recorded_count = Attendance.objects.filter(
-            class_obj=class_obj,
-            date=today
-        ).count()
+        enrolled_count = Enrollment.objects.filter(class_obj=class_obj, is_active=True).count()
+        recorded_count = Attendance.objects.filter(class_obj=class_obj, date=today).count()
         missing_attendance += max(0, enrolled_count - recorded_count)
-    
+
+    # -------------------------
+    # Categorize events
+    # -------------------------
+    now = timezone.now()
+    teacher_audience_filter = Q(target_audience='all') | Q(target_audience__icontains='teacher')
+
+    past_events = Event.objects.filter(
+        is_active=True,
+        is_cancelled=False,
+        end_datetime__lt=now
+    ).filter(teacher_audience_filter).order_by('-start_datetime')[:5]
+
+    ongoing_events = Event.objects.filter(
+        is_active=True,
+        is_cancelled=False,
+        start_datetime__lte=now,
+        end_datetime__gte=now
+    ).filter(teacher_audience_filter).order_by('start_datetime')[:5]
+
+    upcoming_events = Event.objects.filter(
+        is_active=True,
+        is_cancelled=False,
+        start_datetime__gt=now
+    ).filter(teacher_audience_filter).order_by('start_datetime')[:5]
+
+    # -------------------------
+    # Context for template
+    # -------------------------
     context = {
         'teacher': teacher,
         'classes': classes[:5],
@@ -228,9 +257,14 @@ def teacher_dashboard(request):
         'todays_classes': todays_classes,
         'recent_activities': recent_activities,
         'missing_attendance': missing_attendance,
+        'past_events': past_events,
+        'ongoing_events': ongoing_events,
+        'upcoming_events': upcoming_events,
     }
-    
+
     return render(request, 'users/teacher_dashboard.html', context)
+
+
 
 
 # ========================================
@@ -293,69 +327,71 @@ def parent_dashboard(request):
     parent = request.user.parent_profile
     children = parent.children.filter(is_active=True)
 
-    # Gather children data
+    # ================= CHILDREN DATA =================
     children_data = []
     for child in children:
-        # Get final markings per quarter
-        quarterly_records = {}
-        for q in range(1, 5):
-            total_competencies = Domain.objects.aggregate(total=Count('competencies'))['total'] or 0
-            assessed_competencies = QuarterlyCompetencyRecord.objects.filter(
-                child=child,
-                quarter=q
-            ).exclude(level__isnull=True).count()
-
-            consistent_count = QuarterlyCompetencyRecord.objects.filter(
-                child=child,
-                quarter=q,
-                level='C'
-            ).count()
-
-            competency_progress = 0
-            if total_competencies > 0:
-                competency_progress = round((consistent_count / total_competencies) * 100, 1)
-
-            quarterly_records[q] = {
-                'total_competencies': total_competencies,
-                'assessed_competencies': assessed_competencies,
-                'final_markings': consistent_count,
-                'competency_progress': competency_progress,
-            }
-
-        # Get total attendance
         attendance_stats = get_total_attendance(child)
 
         children_data.append({
             'child': child,
-            'quarterly_records': quarterly_records,
             'attendance_rate': attendance_stats['attendance_rate'],
             'present_days': attendance_stats['present_days'],
             'total_days': attendance_stats['total_days'],
         })
 
-    # Upcoming events
-    events = Event.objects.filter(
-        start_date__gte=date.today(),
-        is_active=True,
-        is_cancelled=False
-    ).filter(
-        Q(target_audience='all') | Q(target_audience__icontains='parent')
-    ).order_by('start_date')[:4]
+    # ================= DATE REFERENCES =================
+    now = timezone.now()
+    seven_days_ago = now - timedelta(days=7)
 
-    # Recent announcements
+    # ================= ANNOUNCEMENTS =================
     announcements = Announcement.objects.filter(
         is_active=True,
-        publish_date__lte=timezone.now()
+        publish_date__lte=now
     ).filter(
         Q(target_audience='all') | Q(target_audience='parents')
-    ).select_related('teacher__user').order_by('-publish_date')[:2]
+    ).order_by('-publish_date')[:5]
+
+    recent_announcements_count = Announcement.objects.filter(
+        is_active=True,
+        publish_date__gte=seven_days_ago
+    ).filter(
+        Q(target_audience='all') | Q(target_audience='parents')
+    ).count()
+
+    # ================= EVENTS =================
+    ongoing_events = Event.objects.filter(
+        is_active=True,
+        is_cancelled=False,
+        start_datetime__lte=now,
+        end_datetime__gte=now
+    ).filter(
+        Q(target_audience='all') | Q(target_audience__icontains='parent')
+    )
+
+    upcoming_events = Event.objects.filter(
+        is_active=True,
+        is_cancelled=False,
+        start_datetime__gt=now
+    ).filter(
+        Q(target_audience='all') | Q(target_audience__icontains='parent')
+    ).order_by('start_datetime')
 
     context = {
         'parent': parent,
         'children_data': children_data,
+
+        # summary counts
+        'children_count': children.count(),
+        'recent_announcements_count': recent_announcements_count,
+        'ongoing_events_count': ongoing_events.count(),
+        'upcoming_events_count': upcoming_events.count(),
+
+        # lists
         'announcements': announcements,
-        'events': events,
+        'ongoing_events': ongoing_events[:3],
+        'upcoming_events': upcoming_events[:3],
     }
+
     return render(request, 'users/parent_dashboard.html', context)
 
 
@@ -415,7 +451,7 @@ def child_detail(request, child_id):
     )
 
     enrollment = Enrollment.objects.filter(
-        child=child,
+        student=child,
         is_active=True
     ).select_related('class_obj__teacher__user').first()
 

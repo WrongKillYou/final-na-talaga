@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Announcement{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <h3 class="mb-2">{{ announcement.title }}</h3>
+
+    <p class="text-muted">
+        <i class="bi bi-calendar"></i>
+        {{ announcement.publish_date|date:"F d, Y" }}
+    </p>
+
+    <hr>
+
+    <p>{{ announcement.content|linebreaks }}</p>
+
+    <a href="{% url 'users:parent_dashboard' %}"
+       class="btn btn-outline-secondary mt-3">
+        ← Back to Dashboard
+    </a>
+
+</div>
+{% endblock %}

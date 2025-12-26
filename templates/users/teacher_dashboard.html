@@ -249,6 +249,105 @@
             </div>
         </div>
 
+<!-- Events Section -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-calendar-event text-info"></i> Events</h5>
+        <a href="{% url 'information:create_event' %}" class="btn btn-sm btn-info">
+            <i class="bi bi-plus-circle"></i> Create Event
+        </a>
+    </div>
+    <div class="card-body">
+        <!-- Ongoing Events -->
+        <h6 class="text-success mb-2">Ongoing</h6>
+        {% if ongoing_events %}
+            <ul class="list-group list-group-flush mb-3">
+                {% for event in ongoing_events %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">{{ event.title }}</div>
+                            <small class="text-muted d-block">
+                                {{ event.start_datetime|date:"M d, Y H:i" }}
+                                - {{ event.end_datetime|date:"M d, Y H:i" }}
+                                {% if event.location %}<br><i class="bi bi-geo-alt"></i> {{ event.location }}{% endif %}
+                            </small>
+                            {% if event.description %}
+                                <p class="text-truncate mt-1 mb-0">{{ event.description|truncatewords:15 }}</p>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'information:event_detail' event.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-3">No ongoing events.</p>
+        {% endif %}
+
+        <!-- Upcoming Events -->
+        <h6 class="text-primary mb-2">Upcoming</h6>
+        {% if upcoming_events %}
+            <ul class="list-group list-group-flush mb-3">
+                {% for event in upcoming_events %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">{{ event.title }}</div>
+                            <small class="text-muted d-block">
+                                {{ event.start_datetime|date:"M d, Y H:i" }}
+                                - {{ event.end_datetime|date:"M d, Y H:i" }}
+                                {% if event.location %}<br><i class="bi bi-geo-alt"></i> {{ event.location }}{% endif %}
+                            </small>
+                            {% if event.description %}
+                                <p class="text-truncate mt-1 mb-0">{{ event.description|truncatewords:15 }}</p>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'information:event_detail' event.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-3">No upcoming events.</p>
+        {% endif %}
+
+        <!-- Past Events -->
+        <h6 class="text-secondary mb-2">Past</h6>
+        {% if past_events %}
+            <ul class="list-group list-group-flush">
+                {% for event in past_events %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">{{ event.title }}</div>
+                            <small class="text-muted d-block">
+                                {{ event.start_datetime|date:"M d, Y H:i" }}
+                                - {{ event.end_datetime|date:"M d, Y H:i" }}
+                                {% if event.location %}<br><i class="bi bi-geo-alt"></i> {{ event.location }}{% endif %}
+                            </small>
+                            {% if event.description %}
+                                <p class="text-truncate mt-1 mb-0">{{ event.description|truncatewords:15 }}</p>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'information:event_detail' event.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-0">No past events.</p>
+        {% endif %}
+    </div>
+</div>
+
+
+
+
+
+
+
+
         <!-- Recent Activity -->
         <div class="card shadow-sm">
             <div class="card-header bg-white">

@@ -10,104 +10,57 @@ from users.models import User, Teacher, Parent, Child
 # ========================================
 # EVENTS
 # ========================================
+# models.py
+from django.db import models
+from django.utils import timezone
 
 class Event(models.Model):
-    """School events - one-time or recurring"""
-    EVENT_TYPE_CHOICES = [
-        ('one_time', 'One-Time Event'),
-        ('recurring', 'Recurring Event'),
-    ]
-    
-    RECURRENCE_CHOICES = [
-        ('daily', 'Daily'),
-        ('weekly', 'Weekly'),
-        ('monthly', 'Monthly'),
-    ]
-    
+    """One-time school event"""
+
     title = models.CharField(max_length=200)
-    description = models.TextField()
-    
-    # Event Type
-    event_type = models.CharField(
-        max_length=20, 
-        choices=EVENT_TYPE_CHOICES, 
-        default='one_time'
-    )
-    
-    # Date & Time
-    start_date = models.DateField()
-    end_date = models.DateField()
-    start_time = models.TimeField(null=True, blank=True)
-    end_time = models.TimeField(null=True, blank=True)
-    
-    # For recurring events
-    recurrence_pattern = models.CharField(
-        max_length=20, 
-        choices=RECURRENCE_CHOICES, 
-        null=True, 
-        blank=True
-    )
-    recurrence_end_date = models.DateField(
-        null=True, 
-        blank=True,
-        help_text="Last date for recurring events"
-    )
-    
+    description = models.TextField(blank=True)
+
+    # Event schedule
+    start_datetime = models.DateTimeField()
+    end_datetime = models.DateTimeField(null=True, blank=True)
+
     # Location
-    location = models.CharField(max_length=200)
+    location = models.CharField(max_length=200, blank=True)
     venue_details = models.TextField(blank=True)
-    
+
     # Visibility
-    is_public = models.BooleanField(
-        default=True, 
-        help_text="Visible to all parents and teachers"
-    )
-    target_audience = models.CharField(
-        max_length=100,
-        default='all',
-        help_text="all, parents, teachers, or specific grade levels"
-    )
-    
+    is_public = models.BooleanField(default=True)
+    target_audience = models.CharField(max_length=100, default='all')  # e.g., all, teacher, student
+
     # Organizer
     created_by = models.ForeignKey(
-        Teacher, 
-        on_delete=models.SET_NULL, 
+        'users.Teacher',  # adjust if your teacher model is elsewhere
+        on_delete=models.SET_NULL,
         null=True
     )
-    
+
     # Attachments
-    image = models.ImageField(
-        upload_to='events/', 
-        null=True, 
-        blank=True
-    )
-    attachment = models.FileField(
-        upload_to='event_files/', 
-        null=True, 
-        blank=True
-    )
-    
+    image = models.ImageField(upload_to='events/', null=True, blank=True)
+    attachment = models.FileField(upload_to='event_files/', null=True, blank=True)
+
     # Status
     is_active = models.BooleanField(default=True)
     is_cancelled = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        ordering = ['-start_date', '-created_at']
-        verbose_name = "Event"
-        verbose_name_plural = "Events"
-        indexes = [
-            models.Index(fields=['start_date', 'is_active']),
-        ]
-    
+        ordering = ['start_datetime']
+
     def __str__(self):
-        return f"{self.title} - {self.start_date}"
-    
+        return self.title
+
     def is_upcoming(self):
-        from datetime import date
-        return self.start_date >= date.today() and not self.is_cancelled
+        """Check if the event is upcoming and not cancelled"""
+        return self.start_datetime >= timezone.now() and not self.is_cancelled
+
+
 
 
 # ========================================
