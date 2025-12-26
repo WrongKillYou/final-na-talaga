@@ -1,3 +1,6 @@
+# monitoring/urls.py
+# URL Configuration for MONITORING App - Competency-Based System
+
 from django.urls import path
 from . import views
 
@@ -5,41 +8,68 @@ app_name = 'monitoring'
 
 urlpatterns = [
     # ========================================
-    # Class Management (Teacher)
+    # CLASS MANAGEMENT
     # ========================================
-    path('classes/', views.class_list, name='class_list'),
-    path('class/<int:class_id>/', views.class_detail, name='class_detail'),
-    path('class/<int:class_id>/students/', views.student_list, name='student_list'),
+    path('classes/', 
+         views.class_list, 
+         name='class_list'),
+    
+    path('class/<int:class_id>/', 
+         views.class_detail, 
+         name='class_detail'),
+    
+    path('class/<int:class_id>/students/', 
+         views.class_detail, 
+         name='student_list'),  # Alias for class_detail
+
+    # ========================================
+    # COMPETENCY RECORD MANAGEMENT
+    # ========================================
+    path('class/<int:class_id>/competencies/', 
+         views.competency_input, 
+         name='competency_input'),
+    
+    path('class/<int:class_id>/competencies/template/', 
+         views.download_competency_template, 
+         name='download_competency_template'),
+    
+    path('class/<int:class_id>/competencies/upload/', 
+         views.bulk_upload_competencies, 
+         name='bulk_upload_competencies'),
+    
+    path('student/<int:student_id>/competencies/', 
+         views.student_competency_detail, 
+         name='student_competency_detail'),
     
     # ========================================
-    # Grade Management (Teacher)
+    # ATTENDANCE MANAGEMENT
     # ========================================
-    path('class/<int:class_id>/grades/', views.class_grades, name='class_grades'),
-    path('class/<int:class_id>/upload-grades/', views.grade_input, name='grade_input'),
-    path('class/<int:class_id>/download-template/', views.download_grade_template, name='download_grade_template'),
-    path('student/<int:student_id>/grades/', views.student_grades, name='class_grades'),
-    path('grade/<int:grade_id>/edit/', views.edit_grade, name='edit_grade'),
-    path('class/<int:class_id>/bulk-upload-grades/', views.bulk_upload_grades, name='bulk_upload_grades'),
-    path('class/<int:class_id>/download-template/', views.download_grade_template, name='download_grade_template'),
-
+    path('attendance/', 
+         views.attendance_list, 
+         name='attendance_list'),
+    
+    path('attendance/record/', 
+         views.record_attendance, 
+         name='record_attendance'),
+    
+    path('student/<int:student_id>/attendance/', 
+         views.student_attendance_detail, 
+         name='student_attendance_detail'),
     
     # ========================================
-    # Attendance Management (Teacher)
+    # REPORTS & DOWNLOADS
     # ========================================
-    path('attendance/', views.attendance_list, name='attendance_list'),
-    path('attendance/record/', views.record_attendance, name='record_attendance'),
-    path('student/<int:student_id>/attendance/', views.student_attendance, name='student_attendance'),
+    # Report Card (for Parents)
+    path('report-card/<int:child_id>/<int:quarter>/', 
+         views.download_report_card, 
+         name='download_report_card'),
     
-    # ========================================
-    # Reports (Teacher)
-    # ========================================
-    path('reports/grades/', views.grade_report, name='grade_report'),
-    path('reports/attendance/', views.attendance_report, name='attendance_report'),
-     path('reports/class-summary/', views.class_summary_report, name='class_summary_report'), 
-    path('reports/student-performance/', views.student_performance_report, name='generate_student_report'), 
-    path('class/<int:class_id>/report/', views.class_report, name='class_report'),
-
-
-    path('class/<int:class_id>/students/', views.student_list, name='student_list'),
-    path('class/<int:class_id>/export/', views.export_students, name='export_students'),
+    # Class Report
+    path('class/<int:class_id>/report/', 
+         views.class_report, 
+         name='class_report'),
+    
+    path('class/<int:class_id>/report/export/', 
+         views.export_class_report, 
+         name='export_class_report'),
 ]

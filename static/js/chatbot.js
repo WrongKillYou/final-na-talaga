@@ -1,646 +1,345 @@
-// Chatbot functionality
-document.addEventListener('DOMContentLoaded', function() {
-    // Chatbot state
-    let currentConversationId = null;
-    let messagePollingInterval = null;
-    let children = [];
-    
-    // Chatbot Elements
-    const chatbotToggle = document.getElementById('chatbotToggle');
-    const chatbotWindow = document.getElementById('chatbotWindow');
-    const chatbotClose = document.getElementById('chatbotClose');
-    const chatbotMessages = document.getElementById('chatbotMessages');
-    const chatbotInput = document.getElementById('chatbotMessageInput');
-    const chatbotSend = document.getElementById('chatbotSend');
-    
-    // Check if elements exist
-    if (!chatbotToggle || !chatbotWindow) {
-        console.error('Chatbot elements not found');
-        return;
+// static/js/chatbot.js
+// Floating Chatbot Widget with FAQ and Teacher Contact
+
+class ChatbotWidget {
+    constructor() {
+        this.isOpen = false;
+        this.messages = [];
+        this.waitingForTeacherContact = false;
+        this.init();
     }
-    
-    // Toggle chatbot window
-    chatbotToggle.addEventListener('click', () => {
-        chatbotWindow.classList.toggle('active');
-    });
-    
-    chatbotClose.addEventListener('click', () => {
-        chatbotWindow.classList.remove('active');
-    });
-    
-    // Tab switching
-    const tabs = document.querySelectorAll('.chatbot-tab');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(pane => {
-                pane.classList.remove('active');
-            });
-            
-            tab.classList.add('active');
-            const tabName = tab.dataset.tab;
-            
-            if (tabName === 'chat') {
-                document.getElementById('chatTab').classList.add('active');
-            } else if (tabName === 'live-chat') {
-                document.getElementById('liveChatTab').classList.add('active');
-                loadLiveChat();
-            } else if (tabName === 'announcements') {
-                document.getElementById('announcementsTab').classList.add('active');
-                loadAnnouncements();
-            } else if (tabName === 'events') {
-                document.getElementById('eventsTab').classList.add('active');
-                loadEvents();
-            } else if (tabName === 'faq') {
-                document.getElementById('faqTab').classList.add('active');
-                loadFAQ();
-            }
-        });
-    });
-    
-    // Load children for schedule query
-    fetch('/information/api/children/')
-        .then(response => response.json())
-        .then(data => {
-            children = data;
-            
-            // Populate live chat child selector
-            const liveChatSelect = document.getElementById('liveChatChildSelect');
-            if (liveChatSelect) {
-                children.forEach(child => {
-                    const option = document.createElement('option');
-                    option.value = child.id;
-                    option.textContent = `${child.name} (${child.grade_level} - ${child.section})`;
-                    liveChatSelect.appendChild(option);
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error loading children:', error);
-        });
-    
-    // Send message function
-    function sendMessage() {
-        const message = chatbotInput.value.trim();
-        if (!message) return;
-        
-        addMessage(message, 'user');
-        chatbotInput.value = '';
-        
-        showTypingIndicator();
-        
-        setTimeout(() => {
-            processMessage(message);
-        }, 1000);
+
+    init() {
+        this.createChatbotHTML();
+        this.attachEventListeners();
+        this.showWelcomeMessage();
     }
-    
-    if (chatbotSend) {
-        chatbotSend.addEventListener('click', sendMessage);
+
+    createChatbotHTML() {
+        const chatbotHTML = `
+            <!-- Floating Chatbot Toggle Button -->
+            <button class="chatbot-toggle" id="chatbotToggle">
+                <i class="bi bi-chat-dots-fill"></i>
+            </button>
+
+            <!-- Chatbot Window -->
+            <div class="chatbot-window" id="chatbotWindow">
+                <!-- Header -->
+                <div class="chatbot-header">
+                    <div class="chatbot-header-title">
+                        <div class="chatbot-avatar">🤖</div>
+                        <div>
+                            <h5>KinderCare Assistant</h5>
+                            <small>Always here to help</small>
+                        </div>
+                    </div>
+                    <button class="chatbot-close" id="chatbotClose">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Messages Area -->
+                <div class="chatbot-messages" id="chatbotMessages">
+                    <!-- Messages will be inserted here -->
+                </div>
+
+                <!-- Input Area -->
+                <div class="chatbot-input-area">
+                    <div class="chatbot-input-container">
+                        <input type="text" 
+                               class="chatbot-input" 
+                               id="chatbotInput" 
+                               placeholder="Type your message..."
+                               disabled>
+                        <button class="chatbot-send-btn" id="chatbotSend" disabled>
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', chatbotHTML);
     }
-    
-    if (chatbotInput) {
-        chatbotInput.addEventListener('keypress', (e) => {
+
+    attachEventListeners() {
+        const toggle = document.getElementById('chatbotToggle');
+        const close = document.getElementById('chatbotClose');
+        const send = document.getElementById('chatbotSend');
+        const input = document.getElementById('chatbotInput');
+
+        toggle.addEventListener('click', () => this.toggleChatbot());
+        close.addEventListener('click', () => this.closeChatbot());
+        send.addEventListener('click', () => this.handleSend());
+        
+        input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                sendMessage();
+                this.handleSend();
+            }
+        });
+
+        // Handle quick reply buttons (delegated event)
+        document.getElementById('chatbotMessages').addEventListener('click', (e) => {
+            if (e.target.classList.contains('quick-reply-btn')) {
+                this.handleQuickReply(e.target.dataset.action, e.target.textContent);
             }
         });
     }
-    
-    // Quick reply buttons
-    document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('quick-reply')) {
-            const action = e.target.dataset.action;
-            handleQuickAction(action);
-        }
-    });
-    
-    // Add message to chat
-    function addMessage(text, type = 'bot') {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `chatbot-message ${type}-message`;
+
+    toggleChatbot() {
+        this.isOpen = !this.isOpen;
+        const window = document.getElementById('chatbotWindow');
+        const toggle = document.getElementById('chatbotToggle');
         
-        messageDiv.innerHTML = `
-            <div class="message-avatar">
-                <i class="bi bi-${type === 'bot' ? 'robot' : 'person-fill'}"></i>
-            </div>
-            <div class="message-content">
-                <p>${text}</p>
-            </div>
-        `;
-        
-        chatbotMessages.appendChild(messageDiv);
-        chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-    }
-    
-    // Show typing indicator
-    function showTypingIndicator() {
-        const typingDiv = document.createElement('div');
-        typingDiv.className = 'chatbot-message bot-message typing';
-        typingDiv.innerHTML = `
-            <div class="message-avatar">
-                <i class="bi bi-robot"></i>
-            </div>
-            <div class="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        `;
-        chatbotMessages.appendChild(typingDiv);
-        chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-    }
-    
-    function removeTypingIndicator() {
-        const typing = document.querySelector('.typing');
-        if (typing) typing.remove();
-    }
-    
-    // Process message with AI-like responses
-    function processMessage(message) {
-        removeTypingIndicator();
-        
-        const lowerMessage = message.toLowerCase();
-        let response = '';
-        
-        // Check for schedule query
-        if (lowerMessage.includes('schedule') || lowerMessage.includes('class')) {
-            if (children.length === 0) {
-                response = 'No children found in your account. Please contact the school administrator.';
-                addMessage(response, 'bot');
-            } else if (children.length === 1) {
-                // Only one child, fetch schedule directly
-                fetchChildSchedule(children[0].id);
-                return;
-            } else {
-                // Multiple children, show selection
-                response = 'Which child\'s schedule would you like to see?';
-                addMessage(response, 'bot');
-                
-                const buttonsDiv = document.createElement('div');
-                buttonsDiv.className = 'quick-replies mt-2';
-                children.forEach(child => {
-                    const btn = document.createElement('button');
-                    btn.className = 'quick-reply';
-                    btn.textContent = `${child.name}`;
-                    btn.onclick = () => fetchChildSchedule(child.id);
-                    buttonsDiv.appendChild(btn);
-                });
-                
-                const lastMessage = document.querySelector('.chatbot-messages .chatbot-message:last-child .message-content');
-                if (lastMessage) {
-                    lastMessage.appendChild(buttonsDiv);
-                }
-                return;
-            }
-        } else if (lowerMessage.includes('announcement')) {
-            response = 'Let me show you the latest announcements!';
-            addMessage(response, 'bot');
-            setTimeout(() => {
-                document.querySelector('[data-tab="announcements"]').click();
-            }, 500);
-            return;
-        } else if (lowerMessage.includes('event')) {
-            response = 'Here are the upcoming school events!';
-            addMessage(response, 'bot');
-            setTimeout(() => {
-                document.querySelector('[data-tab="events"]').click();
-            }, 500);
-            return;
-        } else if (lowerMessage.includes('teacher') || lowerMessage.includes('ask')) {
-            response = 'You can chat with a teacher using the "Ask Teacher" tab!';
-            addMessage(response, 'bot');
-            setTimeout(() => {
-                document.querySelector('[data-tab="live-chat"]').click();
-            }, 500);
-            return;
-        } else if (lowerMessage.includes('contact') || lowerMessage.includes('phone')) {
-            response = 'You can reach us at:<br>📞 Phone: (123) 456-7890<br>📧 Email: info@school.edu<br>📍 Address: 123 School Street';
-        } else if (lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-            response = 'Hello! How can I assist you today? You can ask me about class schedules, announcements, events, or talk to a teacher.';
+        if (this.isOpen) {
+            window.classList.add('active');
+            toggle.classList.add('active');
+            toggle.innerHTML = '<i class="bi bi-x-lg"></i>';
+            this.scrollToBottom();
         } else {
-            response = 'I\'m here to help! You can ask me about:<br>• Class schedules<br>• Recent announcements<br>• Upcoming events<br>• Talk to a teacher<br>• Contact information';
-        }
-        
-        addMessage(response, 'bot');
-    }
-    
-    // Fetch child schedule
-    function fetchChildSchedule(childId) {
-        showTypingIndicator();
-        
-        fetch(`/information/api/children/${childId}/schedule/`)
-            .then(response => response.json())
-            .then(data => {
-                removeTypingIndicator();
-                
-                let scheduleHtml = `<strong>${data.child_name}'s Schedule</strong><br>`;
-                scheduleHtml += `<small>${data.grade_level} - ${data.section}</small><br><br>`;
-                
-                if (data.schedule.length === 0) {
-                    scheduleHtml += '<em>No enrolled subjects yet.</em>';
-                } else {
-                    scheduleHtml += '<div style="font-size: 13px;">';
-                    data.schedule.forEach(item => {
-                        scheduleHtml += `
-                            <div style="margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
-                                <strong>📚 ${item.subject}</strong><br>
-                                <small>👨‍🏫 ${item.teacher}</small><br>
-                                <small>📍 ${item.room}</small>
-                            </div>
-                        `;
-                    });
-                    scheduleHtml += '</div>';
-                }
-                
-                addMessage(scheduleHtml, 'bot');
-            })
-            .catch(error => {
-                removeTypingIndicator();
-                addMessage('Sorry, I couldn\'t fetch the schedule. Please try again later.', 'bot');
-            });
-    }
-    
-    // Handle quick actions
-    function handleQuickAction(action) {
-        if (action === 'schedule') {
-            processMessage('show me the schedule');
-        } else if (action === 'announcements') {
-            document.querySelector('[data-tab="announcements"]').click();
-        } else if (action === 'events') {
-            document.querySelector('[data-tab="events"]').click();
-        } else if (action === 'help') {
-            document.querySelector('[data-tab="faq"]').click();
+            window.classList.remove('active');
+            toggle.classList.remove('active');
+            toggle.innerHTML = '<i class="bi bi-chat-dots-fill"></i>';
         }
     }
-    
-    // Load announcements
-    function loadAnnouncements() {
-        const container = document.querySelector('#announcementsTab .chatbot-messages');
-        
-        fetch('/information/api/announcements/recent/')
-            .then(response => response.json())
-            .then(data => {
-                container.innerHTML = '';
-                
-                if (data.length === 0) {
-                    container.innerHTML = '<p class="text-center text-muted">No announcements available.</p>';
-                    return;
-                }
-                
-                data.forEach(announcement => {
-                    const card = document.createElement('div');
-                    card.className = `announcement-card ${announcement.is_important ? 'important' : ''}`;
-                    card.innerHTML = `
-                        ${announcement.is_important ? '<span class="badge bg-danger mb-2">Important</span>' : ''}
-                        <h6>${announcement.title}</h6>
-                        <p>${announcement.content.substring(0, 100)}...</p>
-                        <small>${new Date(announcement.publish_date).toLocaleDateString()}</small>
-                    `;
-                    container.appendChild(card);
-                });
-            })
-            .catch(error => {
-                container.innerHTML = '<p class="text-center text-danger">Error loading announcements.</p>';
-            });
+
+    closeChatbot() {
+        this.isOpen = false;
+        document.getElementById('chatbotWindow').classList.remove('active');
+        const toggle = document.getElementById('chatbotToggle');
+        toggle.classList.remove('active');
+        toggle.innerHTML = '<i class="bi bi-chat-dots-fill"></i>';
     }
-    
-    // Load events
-    function loadEvents() {
-        const container = document.querySelector('#eventsTab .chatbot-messages');
-        
-        fetch('/information/api/events/upcoming/')
-            .then(response => response.json())
-            .then(data => {
-                container.innerHTML = '';
-                
-                if (data.length === 0) {
-                    container.innerHTML = '<p class="text-center text-muted">No upcoming events.</p>';
-                    return;
-                }
-                
-                data.forEach(event => {
-                    const card = document.createElement('div');
-                    card.className = 'event-card';
-                    card.innerHTML = `
-                        <h6>${event.title}</h6>
-                        <p>${event.description.substring(0, 80)}...</p>
-                        <small>📅 ${new Date(event.date).toLocaleDateString()} ${event.start_time ? 'at ' + event.start_time : ''}</small>
-                    `;
-                    container.appendChild(card);
-                });
-            })
-            .catch(error => {
-                container.innerHTML = '<p class="text-center text-danger">Error loading events.</p>';
-            });
+
+    showWelcomeMessage() {
+        setTimeout(() => {
+            this.addBotMessage(
+                "👋 Hello! Welcome to KinderCare! I'm your virtual assistant. How can I help you today?",
+                this.getMainMenuButtons()
+            );
+        }, 500);
     }
-    
-    // Load FAQ
-    function loadFAQ() {
-        const container = document.getElementById('faqList');
-        const faqs = [
-            {
-                question: 'What are the school hours?',
-                answer: 'Regular classes run from 7:30 AM to 3:30 PM, Monday through Friday.'
-            },
-            {
-                question: 'How do I view my child\'s class schedule?',
-                answer: 'You can ask me "show schedule" in the chat, or go to your child\'s detail page from the dashboard.'
-            },
-            {
-                question: 'How can I check my child\'s grades?',
-                answer: 'You can view grades anytime through your parent dashboard. Grades are updated regularly by teachers.'
-            },
-            {
-                question: 'How do I contact teachers?',
-                answer: 'You can use the "Ask Teacher" tab to start a live chat with available teachers.'
-            },
-            {
-                question: 'What if my child is absent?',
-                answer: 'Please inform the school through the attendance system or call the office. Provide a valid excuse letter upon return.'
-            }
+
+    getMainMenuButtons() {
+        return [
+            { action: 'hours', text: '🕒 Operating Hours', icon: 'bi-clock' },
+            { action: 'enrollment', text: '📝 Enrollment Info', icon: 'bi-file-text' },
+            { action: 'curriculum', text: '📚 Curriculum', icon: 'bi-book' },
+            { action: 'fees', text: '💰 Fees & Payment', icon: 'bi-cash' },
+            { action: 'contact', text: '📞 Contact Teacher', icon: 'bi-person-video' }
         ];
-        
-        container.innerHTML = '';
-        faqs.forEach((faq, index) => {
-            const faqItem = document.createElement('div');
-            faqItem.className = 'faq-item';
-            faqItem.innerHTML = `
-                <button class="faq-question">
-                    ${faq.question}
-                    <i class="bi bi-chevron-down"></i>
-                </button>
-                <div class="faq-answer">${faq.answer}</div>
-            `;
-            
-            faqItem.querySelector('.faq-question').addEventListener('click', () => {
-                faqItem.classList.toggle('active');
-            });
-            
-            container.appendChild(faqItem);
+    }
+
+    addMessage(type, text, quickReplies = null) {
+        const messagesContainer = document.getElementById('chatbotMessages');
+        const time = new Date().toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
         });
-    }
-    
-    // ========================================
-    // LIVE CHAT FUNCTIONALITY
-    // ========================================
-    
-    function loadLiveChat() {
-        const loading = document.getElementById('liveChatLoading');
-        const noActive = document.getElementById('noActiveChat');
-        const active = document.getElementById('activeChat');
-        const inputArea = document.getElementById('liveChatInputArea');
+
+        let avatarContent = type === 'bot' ? '🤖' : '👤';
         
-        loading.style.display = 'flex';
-        noActive.style.display = 'none';
-        active.style.display = 'none';
-        inputArea.style.display = 'none';
-        
-        fetch('/information/api/chat/conversations/')
-            .then(response => response.json())
-            .then(data => {
-                loading.style.display = 'none';
-                
-                if (data.has_active) {
-                    currentConversationId = data.conversation.id;
-                    active.style.display = 'block';
-                    inputArea.style.display = 'flex';
-                    loadConversationMessages(currentConversationId);
-                    startMessagePolling();
-                } else {
-                    currentConversationId = null;
-                    noActive.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                loading.style.display = 'none';
-                noActive.innerHTML = '<p class="text-center text-danger">Error loading chat</p>';
-                noActive.style.display = 'block';
-            });
-    }
-    
-    // Start live chat
-    const startLiveChatBtn = document.getElementById('startLiveChatBtn');
-    if (startLiveChatBtn) {
-        startLiveChatBtn.addEventListener('click', function() {
-            const initialMessage = document.getElementById('initialMessage').value.trim();
-            const childId = document.getElementById('liveChatChildSelect').value;
-            
-            if (!initialMessage) {
-                alert('Please type a message');
-                return;
-            }
-            
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Starting...';
-            
-            fetch('/information/api/chat/conversations/create/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({
-                    initial_message: initialMessage,
-                    child_id: childId || null,
-                    subject: 'General Inquiry'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('initialMessage').value = '';
-                    loadLiveChat();
-                } else {
-                    alert(data.error || 'Failed to start conversation');
-                    this.disabled = false;
-                    this.innerHTML = '<i class="bi bi-send"></i> Start Conversation';
-                }
-            })
-            .catch(error => {
-                alert('Error starting conversation');
-                this.disabled = false;
-                this.innerHTML = '<i class="bi bi-send"></i> Start Conversation';
-            });
-        });
-    }
-    
-    // Load conversation messages
-    function loadConversationMessages(conversationId) {
-        fetch(`/information/api/chat/conversations/${conversationId}/messages/`)
-            .then(response => response.json())
-            .then(data => {
-                const container = document.getElementById('liveChatMessages');
-                container.innerHTML = '';
-                
-                data.messages.forEach(msg => {
-                    addLiveChatMessage(msg);
-                });
-                
-                container.scrollTop = container.scrollHeight;
-            });
-    }
-    
-    // Add live chat message
-    function addLiveChatMessage(msg) {
-        const container = document.getElementById('liveChatMessages');
-        const messageDiv = document.createElement('div');
-        
-        let messageClass = 'bot-message';
-        let icon = 'robot';
-        
-        if (msg.sender_role === 'parent') {
-            messageClass = 'user-message';
-            icon = 'person-fill';
-        } else if (msg.sender_role === 'teacher') {
-            messageClass = 'teacher-message';
-            icon = 'person-badge';
-        } else if (msg.sender_role === 'system') {
-            messageClass = 'system-message';
-            icon = 'info-circle';
-        }
-        
-        messageDiv.className = `chatbot-message ${messageClass}`;
-        messageDiv.innerHTML = `
-            <div class="message-avatar">
-                <i class="bi bi-${icon}"></i>
-            </div>
-            <div class="message-content">
-                <p>${msg.message}</p>
-                <small class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</small>
+        const messageHTML = `
+            <div class="message ${type}">
+                <div class="message-avatar">${avatarContent}</div>
+                <div>
+                    <div class="message-bubble">
+                        ${text}
+                    </div>
+                    <div class="message-time">${time}</div>
+                    ${quickReplies ? this.createQuickReplies(quickReplies) : ''}
+                </div>
             </div>
         `;
-        
-        container.appendChild(messageDiv);
+
+        messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
+        this.scrollToBottom();
     }
-    
-    // Send live chat message
-    const liveChatSend = document.getElementById('liveChatSend');
-    const liveChatMessageInput = document.getElementById('liveChatMessageInput');
-    
-    if (liveChatSend) {
-        liveChatSend.addEventListener('click', sendLiveChatMessage);
+
+    addBotMessage(text, quickReplies = null) {
+        // Show typing indicator
+        this.showTypingIndicator();
+
+        // Simulate typing delay
+        setTimeout(() => {
+            this.hideTypingIndicator();
+            this.addMessage('bot', text, quickReplies);
+        }, 800);
     }
-    
-    if (liveChatMessageInput) {
-        liveChatMessageInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                sendLiveChatMessage();
-            }
-        });
+
+    addUserMessage(text) {
+        this.addMessage('user', text);
     }
-    
-    function sendLiveChatMessage() {
-        const input = document.getElementById('liveChatMessageInput');
-        const message = input.value.trim();
-        
-        if (!message || !currentConversationId) return;
-        
-        input.value = '';
-        input.disabled = true;
-        
-        fetch(`/information/api/chat/conversations/${currentConversationId}/send/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+
+    createQuickReplies(buttons) {
+        const buttonsHTML = buttons.map(btn => `
+            <button class="quick-reply-btn" data-action="${btn.action}">
+                <i class="bi ${btn.icon || 'bi-arrow-right'}"></i>
+                ${btn.text}
+            </button>
+        `).join('');
+
+        return `<div class="quick-replies">${buttonsHTML}</div>`;
+    }
+
+    showTypingIndicator() {
+        const messagesContainer = document.getElementById('chatbotMessages');
+        const typingHTML = `
+            <div class="message bot" id="typingIndicator">
+                <div class="message-avatar">🤖</div>
+                <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        `;
+        messagesContainer.insertAdjacentHTML('beforeend', typingHTML);
+        this.scrollToBottom();
+    }
+
+    hideTypingIndicator() {
+        const indicator = document.getElementById('typingIndicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+
+    handleQuickReply(action, text) {
+        // Add user's choice as message
+        this.addUserMessage(text);
+
+        // Process the action
+        setTimeout(() => {
+            this.processAction(action);
+        }, 500);
+    }
+
+    processAction(action) {
+        const responses = {
+            'hours': {
+                text: `📅 <strong>Operating Hours:</strong><br><br>
+                       Monday - Friday: 7:00 AM - 6:00 PM<br>
+                       Saturday: 8:00 AM - 12:00 PM<br>
+                       Sunday: Closed<br><br>
+                       We're closed on public holidays.`,
+                buttons: this.getBackButton()
             },
-            body: JSON.stringify({ message: message })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                addLiveChatMessage(data.message);
-                document.getElementById('liveChatMessages').scrollTop = document.getElementById('liveChatMessages').scrollHeight;
+            'enrollment': {
+                text: `📋 <strong>Enrollment Process:</strong><br><br>
+                       1. Fill out the enrollment form<br>
+                       2. Submit required documents (Birth Certificate, Medical Records)<br>
+                       3. Schedule an orientation visit<br>
+                       4. Complete enrollment fee payment<br><br>
+                       Current openings available!`,
+                buttons: this.getBackButton()
+            },
+            'curriculum': {
+                text: `📖 <strong>Our Curriculum:</strong><br><br>
+                       We follow the K-12 Kindergarten Framework with focus on:<br><br>
+                       • Health & Motor Development<br>
+                       • Socio-Emotional Development<br>
+                       • Language & Literacy<br>
+                       • Mathematics<br>
+                       • Understanding the Environment<br><br>
+                       Learning through play-based activities!`,
+                buttons: this.getBackButton()
+            },
+            'fees': {
+                text: `💳 <strong>Fees & Payment:</strong><br><br>
+                       Monthly Tuition: ₱3,500<br>
+                       Enrollment Fee: ₱2,000 (one-time)<br>
+                       Materials Fee: ₱1,500/semester<br><br>
+                       Payment Options:<br>
+                       • Cash/Check<br>
+                       • Bank Transfer<br>
+                       • GCash/PayMaya<br><br>
+                       Sibling discounts available!`,
+                buttons: this.getBackButton()
+            },
+            'contact': {
+                text: `👨‍🏫 Would you like to start a conversation with your child's teacher?<br><br>
+                       This will open a direct chat where you can discuss:<br>
+                       • Your child's progress<br>
+                       • Attendance concerns<br>
+                       • Schedule questions<br>
+                       • Any other concerns`,
+                buttons: [
+                    { action: 'start_chat', text: '✅ Yes, Contact Teacher', icon: 'bi-chat-text' },
+                    { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
+                ]
+            },
+            'start_chat': {
+                text: `✅ Great! I'm redirecting you to start a conversation with your teacher.<br><br>
+                       <a href="/information/chat/start/" class="message-action-btn">
+                           <i class="bi bi-chat-text-fill"></i> Open Teacher Chat
+                       </a><br><br>
+                       You can also view your message history anytime.`,
+                buttons: [
+                    { action: 'view_history', text: '📜 View Message History', icon: 'bi-clock-history' },
+                    { action: 'back', text: '← Back to Menu', icon: 'bi-arrow-left' }
+                ]
+            },
+            'view_history': {
+                text: `Opening your message history...`,
+                buttons: null
+            },
+            'back': {
+                text: `What else would you like to know?`,
+                buttons: this.getMainMenuButtons()
             }
-            input.disabled = false;
-            input.focus();
-        })
-        .catch(error => {
-            alert('Error sending message');
-            input.disabled = false;
-        });
-    }
-    
-    // Close conversation
-    const closeLiveChatBtn = document.getElementById('closeLiveChatBtn');
-    if (closeLiveChatBtn) {
-        closeLiveChatBtn.addEventListener('click', function() {
-            if (!currentConversationId) return;
-            
-            if (!confirm('Are you sure you want to end this conversation?')) return;
-            
-            fetch(`/information/api/chat/conversations/${currentConversationId}/close/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    stopMessagePolling();
-                    loadLiveChat();
-                }
-            });
-        });
-    }
-    
-    // Poll for new messages
-    function startMessagePolling() {
-        if (messagePollingInterval) {
-            clearInterval(messagePollingInterval);
-        }
-        
-        messagePollingInterval = setInterval(() => {
-            if (currentConversationId && document.getElementById('activeChat').style.display === 'block') {
-                loadConversationMessages(currentConversationId);
-            }
-        }, 3000); // Poll every 3 seconds
-    }
-    
-    function stopMessagePolling() {
-        if (messagePollingInterval) {
-            clearInterval(messagePollingInterval);
-            messagePollingInterval = null;
-        }
-    }
-    
-    // Get CSRF token
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
+        };
+
+        const response = responses[action];
+        if (response) {
+            this.addBotMessage(response.text, response.buttons);
+
+            // Handle special actions
+            if (action === 'view_history') {
+                setTimeout(() => {
+                    window.location.href = '/information/chat/history/';
+                }, 1500);
             }
         }
-        return cookieValue;
     }
-    
-    // Check for unread messages periodically
-    setInterval(() => {
-        fetch('/information/api/chat/unread-count/')
-            .then(response => response.json())
-            .then(data => {
-                const badge = document.getElementById('chatbotBadge');
-                const notification = document.getElementById('liveChatNotification');
-                
-                if (data.count > 0) {
-                    badge.textContent = data.count;
-                    badge.style.display = 'flex';
-                    if (notification) notification.style.display = 'block';
-                } else {
-                    badge.style.display = 'none';
-                    if (notification) notification.style.display = 'none';
-                }
-            })
-            .catch(error => {
-                console.error('Error checking unread messages:', error);
-            });
-    }, 5000); // Check every 5 seconds
+
+    getBackButton() {
+        return [
+            { action: 'back', text: '← Back to Main Menu', icon: 'bi-arrow-left' }
+        ];
+    }
+
+    handleSend() {
+        const input = document.getElementById('chatbotInput');
+        const message = input.value.trim();
+
+        if (message) {
+            this.addUserMessage(message);
+            input.value = '';
+
+            // Process custom message (you can add AI integration here)
+            setTimeout(() => {
+                this.addBotMessage(
+                    "I'm sorry, I can only help with the menu options above. Please select one of the quick replies, or contact a teacher directly for specific questions.",
+                    this.getMainMenuButtons()
+                );
+            }, 500);
+        }
+    }
+
+    scrollToBottom() {
+        const messagesContainer = document.getElementById('chatbotMessages');
+        setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 100);
+    }
+}
+
+// Initialize chatbot when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize on parent dashboard
+    if (document.body.classList.contains('parent-dashboard') || 
+        window.location.pathname.includes('parent/dashboard')) {
+        new ChatbotWidget();
+    }
 });

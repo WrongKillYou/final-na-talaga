@@ -1,3 +1,6 @@
+<!-- monitoring/class_detail.html -->
+
+
 {% extends 'base.html' %}
 
 {% block title %}{{ class_obj.subject }} - Details{% endblock %}
@@ -31,7 +34,7 @@
             </div>
             <div class="col-md-4 text-md-end">
                 <div class="btn-group" role="group">
-                    <a href="{% url 'monitoring:grade_input' class_obj.id %}" class="btn btn-success">
+                    <a href="{% url 'monitoring:competency_input' class_obj.id %}" class="btn btn-success">
                         <i class="bi bi-pencil-square"></i> Input Grades
                     </a>
                     <a href="{% url 'monitoring:attendance_list' %}?class_id={{ class_obj.id }}" class="btn btn-info">
@@ -112,7 +115,7 @@
                                         <img src="{{ student.photo.url }}" 
                                              class="rounded-circle" 
                                              width="35" height="35" 
-                                             alt="{{ student.get_full_name }}">
+                                             alt="{{ child.get_full_name }}">
                                     {% else %}
                                         <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center" 
                                              style="width: 35px; height: 35px; display: inline-flex;">
@@ -121,7 +124,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <strong>{{ student.get_full_name }}</strong>
+                                    <strong>{{ child.get_full_name }}</strong>
                                 </td>
                                 <td><small class="text-muted">{{ student.lrn }}</small></td>
                                 <td>{{ student.get_gender_display }}</td>

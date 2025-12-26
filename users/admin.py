@@ -140,7 +140,7 @@ class ParentCreationForm(forms.ModelForm):
 class TeacherAdmin(admin.ModelAdmin):
     form = TeacherCreationForm
     list_display = ('get_full_name', 'license_number', 'department', 'contact_number', 'is_active')
-    list_filter = ('department', 'is_active', 'sex')
+    list_filter = ('department', 'is_active', 'gender')
     search_fields = ('user__username', 'license_number', 'user__first_name', 'user__last_name')
     
     fieldsets = (
@@ -151,7 +151,7 @@ class TeacherAdmin(admin.ModelAdmin):
             'fields': ('license_number', 'department')
         }),
         ('Personal Information', {
-            'fields': ('sex', 'birth_date', 'contact_email', 'contact_number', 'photo')
+            'fields': ('gender', 'birth_date', 'contact_email', 'contact_number', 'photo')
         }),
         ('Additional Info', {
             'fields': ('address', 'is_active')
@@ -166,7 +166,7 @@ class TeacherAdmin(admin.ModelAdmin):
 class ParentAdmin(admin.ModelAdmin):
     form = ParentCreationForm
     list_display = ('get_full_name', 'parent_email', 'parent_contact', 'is_primary_contact')
-    list_filter = ('is_primary_contact', 'sex')
+    list_filter = ('is_primary_contact', 'gender')
     search_fields = ('user__username', 'user__first_name', 'user__last_name', 'parent_email')
     
     fieldsets = (
@@ -177,7 +177,7 @@ class ParentAdmin(admin.ModelAdmin):
             'fields': ('parent_email', 'parent_contact', 'relationship_to_child', 'is_primary_contact')
         }),
         ('Personal Information', {
-            'fields': ('sex', 'birth_date', 'photo')
+            'fields': ('gender', 'birth_date', 'photo')
         }),
         ('Work Information', {
             'fields': ('occupation', 'workplace')

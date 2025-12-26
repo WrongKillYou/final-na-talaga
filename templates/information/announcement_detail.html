@@ -132,7 +132,7 @@
                     
                     {% if user.role == 'teacher' and announcement.teacher == user.teacher_profile %}
                         <div>
-                            <a href="{% url 'information:announcement_edit' announcement.id %}" class="btn btn-warning">
+                            <a href="{% url 'information:edit_announcement' announcement.id %}" class="btn btn-warning">
                                 <i class="bi bi-pencil"></i> Edit
                             </a>
                             <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
@@ -185,7 +185,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form method="post" action="{% url 'information:announcement_delete' announcement.id %}">
+                    <form method="post" action="{% url 'information:delete_announcement' announcement.id %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-danger">Delete Announcement</button>
                     </form>

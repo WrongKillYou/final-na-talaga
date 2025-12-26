@@ -1,3 +1,5 @@
+<!-- monitoring/class_list.html -->
+
 {% extends 'base.html' %}
 
 {% block title %}My Classes{% endblock %}
@@ -6,8 +8,10 @@
 <!-- Page Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2><i class="bi bi-journal-text text-primary"></i> My Classes</h2>
-        <p class="text-muted">Manage your assigned classes</p>
+        <h2 class="fw-bold">
+            <i class="bi bi-journal-text text-primary"></i> My Classes
+        </h2>
+        <p class="text-secondary mb-0">Manage your assigned classes</p>
     </div>
     <a href="{% url 'users:teacher_dashboard' %}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left"></i> Back to Dashboard
@@ -16,76 +20,103 @@
 
 <!-- Classes Grid -->
 {% if classes %}
-    <div class="row g-4">
-        {% for class in classes %}
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 shadow-sm hover-card">
-                    <div class="card-header bg-gradient text-white" 
-                         style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        <h5 class="mb-0">{{ class.subject }}</h5>
-                        <small>{{ class.subject_code }}</small>
+<div class="row g-4">
+    {% for class in classes %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm hover-card">
+
+            <!-- Header (fixed contrast) -->
+            <div class="card-header"
+                 style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="mb-1 text-white fw-semibold">
+                    {{ class.subject }}
+                </h5>
+                <small class="text-light opacity-75">
+                    {{ class.subject_code }}
+                </small>
+            </div>
+
+            <div class="card-body">
+                <!-- Class Info -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-secondary">Grade & Section:</span>
+                        <strong class="text-dark">
+                            {{ class.grade_level|title }} - {{ class.section }}
+                        </strong>
                     </div>
-                    <div class="card-body">
-                        <!-- Class Info -->
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span class="text-muted">Grade & Section:</span>
-                                <strong>{{ class.grade_level|title }} - {{ class.section }}</strong>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span class="text-muted">Students:</span>
-                                <span class="badge bg-primary">{{ class.student_count }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span class="text-muted">Room:</span>
-                                <strong>{{ class.room|default:"TBA" }}</strong>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span class="text-muted">Schedule:</span>
-                                <strong>{{ class.schedule|default:"TBA" }}</strong>
-                            </div>
-                        </div>
-                        
-                        <!-- Quick Actions -->
-                        <div class="d-grid gap-2">
-                            <a href="{% url 'monitoring:class_detail' class.id %}" 
-                               class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-eye"></i> View Details
-                            </a>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'monitoring:grade_input' class.id %}" 
-                                   class="btn btn-sm btn-success">
-                                    <i class="bi bi-pencil-square"></i> Grades
-                                </a>
-                                <a href="{% url 'monitoring:record_attendance' %}?class_id={{ class.id }}"
-                            class="btn btn-sm btn-info">
-                                    <i class="bi bi-clipboard-check"></i> Attendance
-                                </a>
-                            </div>
-                        </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-secondary">Students:</span>
+                        <span class="badge bg-primary">
+                            {{ class.student_count }}
+                        </span>
                     </div>
-                    <div class="card-footer bg-light text-muted small">
-                        <i class="bi bi-calendar3"></i> {{ class.school_year }}
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-secondary">Room:</span>
+                        <strong class="text-dark">
+                            {{ class.room|default:"TBA" }}
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span class="text-secondary">Schedule:</span>
+                        <strong class="text-dark">
+                            {{ class.schedule|default:"TBA" }}
+                        </strong>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="d-grid gap-2">
+                    <a href="{% url 'monitoring:class_detail' class.id %}"
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i> View Details
+                    </a>
+
+                    <div class="btn-group" role="group">
+                        <a href="{% url 'monitoring:competency_input' class.id %}"
+                           class="btn btn-sm btn-success">
+                            <i class="bi bi-pencil-square"></i> Grades
+                        </a>
+
+                        <!-- FIX: btn-info text contrast -->
+                        <a href="{% url 'monitoring:record_attendance' %}?class_id={{ class.id }}"
+                           class="btn btn-sm btn-info text-dark">
+                            <i class="bi bi-clipboard-check"></i> Attendance
+                        </a>
                     </div>
                 </div>
             </div>
-        {% endfor %}
+
+            <!-- Footer -->
+            <div class="card-footer bg-light text-dark small">
+                <i class="bi bi-calendar3"></i>
+                {{ class.school_year }}
+            </div>
+
+        </div>
     </div>
+    {% endfor %}
+</div>
+
 {% else %}
-    <div class="alert alert-info">
-        <i class="bi bi-info-circle"></i> You have no assigned classes yet.
-    </div>
+<div class="alert alert-info text-dark">
+    <i class="bi bi-info-circle"></i>
+    You have no assigned classes yet.
+</div>
 {% endif %}
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .hover-card {
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .hover-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.15) !important;
-    }
+.hover-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.hover-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.15) !important;
+}
 </style>
 {% endblock %}

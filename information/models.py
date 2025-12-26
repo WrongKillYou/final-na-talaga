@@ -1,28 +1,38 @@
+# information/models.py
+# CLEANED - Removed redundant chat systems, kept only one unified approach
+
 from django.db import models
-from users.models import User, Teacher, Parent, Child
 from django.conf import settings
 from django.utils import timezone
+from users.models import User, Teacher, Parent, Child
+
+
+# ========================================
+# EVENTS
+# ========================================
 
 class Event(models.Model):
-    """School events - scheduled or one-time"""
+    """School events - one-time or recurring"""
     EVENT_TYPE_CHOICES = [
         ('one_time', 'One-Time Event'),
         ('recurring', 'Recurring Event'),
-        ('scheduled', 'Scheduled Event'),
     ]
     
     RECURRENCE_CHOICES = [
         ('daily', 'Daily'),
         ('weekly', 'Weekly'),
         ('monthly', 'Monthly'),
-        ('yearly', 'Yearly'),
     ]
     
     title = models.CharField(max_length=200)
     description = models.TextField()
     
     # Event Type
-    event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES, default='one_time')
+    event_type = models.CharField(
+        max_length=20, 
+        choices=EVENT_TYPE_CHOICES, 
+        default='one_time'
+    )
     
     # Date & Time
     start_date = models.DateField()
@@ -37,26 +47,45 @@ class Event(models.Model):
         null=True, 
         blank=True
     )
-    recurrence_end_date = models.DateField(null=True, blank=True)
+    recurrence_end_date = models.DateField(
+        null=True, 
+        blank=True,
+        help_text="Last date for recurring events"
+    )
     
     # Location
     location = models.CharField(max_length=200)
     venue_details = models.TextField(blank=True)
     
     # Visibility
-    is_public = models.BooleanField(default=True, help_text="Visible to all parents")
-    target_grades = models.CharField(
-        max_length=200, 
-        blank=True, 
-        help_text="Comma-separated grade levels if specific"
+    is_public = models.BooleanField(
+        default=True, 
+        help_text="Visible to all parents and teachers"
+    )
+    target_audience = models.CharField(
+        max_length=100,
+        default='all',
+        help_text="all, parents, teachers, or specific grade levels"
     )
     
     # Organizer
-    created_by = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True)
+    created_by = models.ForeignKey(
+        Teacher, 
+        on_delete=models.SET_NULL, 
+        null=True
+    )
     
     # Attachments
-    image = models.ImageField(upload_to='events/', null=True, blank=True)
-    attachment = models.FileField(upload_to='event_files/', null=True, blank=True)
+    image = models.ImageField(
+        upload_to='events/', 
+        null=True, 
+        blank=True
+    )
+    attachment = models.FileField(
+        upload_to='event_files/', 
+        null=True, 
+        blank=True
+    )
     
     # Status
     is_active = models.BooleanField(default=True)
@@ -65,18 +94,25 @@ class Event(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    class Meta:
+        ordering = ['-start_date', '-created_at']
+        verbose_name = "Event"
+        verbose_name_plural = "Events"
+        indexes = [
+            models.Index(fields=['start_date', 'is_active']),
+        ]
+    
     def __str__(self):
         return f"{self.title} - {self.start_date}"
     
     def is_upcoming(self):
         from datetime import date
         return self.start_date >= date.today() and not self.is_cancelled
-    
-    class Meta:
-        ordering = ['-start_date', '-created_at']
-        verbose_name = "Event"
-        verbose_name_plural = "Events"
 
+
+# ========================================
+# ANNOUNCEMENTS
+# ========================================
 
 class Announcement(models.Model):
     """General announcements for parents and teachers"""
@@ -97,29 +133,55 @@ class Announcement(models.Model):
     
     title = models.CharField(max_length=255)
     content = models.TextField()
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='general')
-    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='normal')
+    category = models.CharField(
+        max_length=20, 
+        choices=CATEGORY_CHOICES, 
+        default='general'
+    )
+    priority = models.CharField(
+        max_length=10, 
+        choices=PRIORITY_CHOICES, 
+        default='normal'
+    )
     
     # Targeting
-    target_audience = models.CharField(max_length=200, default='all')
-    is_school_wide = models.BooleanField(default=False)
-    class_obj = models.ForeignKey('monitoring.Class', on_delete=models.SET_NULL, null=True, blank=True)
-    target_levels = models.CharField(max_length=255, blank=True, null=True)
+    target_audience = models.CharField(
+        max_length=200, 
+        default='all',
+        help_text="all, parents, teachers"
+    )
     
-    # Author - Use 'teacher' consistently
-    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, related_name='announcements')
+    # Author
+    teacher = models.ForeignKey(
+        Teacher, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='announcements'
+    )
     
     # Attachments
-    image = models.ImageField(upload_to='announcements/images/', null=True, blank=True, help_text='Banner image for announcement')
-    attachment = models.FileField(upload_to='announcement_files/', null=True, blank=True)
+    image = models.ImageField(
+        upload_to='announcements/images/', 
+        null=True, 
+        blank=True, 
+        help_text='Banner image for announcement'
+    )
+    attachment = models.FileField(
+        upload_to='announcement_files/', 
+        null=True, 
+        blank=True
+    )
     
-    # ADDED: Missing fields referenced in views/templates
-    is_important = models.BooleanField(default=False, help_text='Mark as important announcement')
-    
-    # Visibility
+    # Importance and Visibility
+    is_important = models.BooleanField(
+        default=False, 
+        help_text='Mark as important announcement'
+    )
     is_pinned = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    publish_date = models.DateTimeField(auto_now_add=True)
+    
+    # Publishing
+    publish_date = models.DateTimeField(default=timezone.now)
     scheduled_publish = models.DateTimeField(null=True, blank=True)
     expiry_date = models.DateTimeField(null=True, blank=True)
     
@@ -129,6 +191,14 @@ class Announcement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    class Meta:
+        ordering = ['-is_pinned', '-priority', '-publish_date']
+        verbose_name = "Announcement"
+        verbose_name_plural = "Announcements"
+        indexes = [
+            models.Index(fields=['-publish_date', 'is_active']),
+        ]
+    
     def __str__(self):
         return f"{self.title} - {self.priority}"
     
@@ -137,15 +207,24 @@ class Announcement(models.Model):
             return timezone.now() > self.expiry_date
         return False
     
-    class Meta:
-        ordering = ['-is_pinned', '-priority', '-created_at']
-        verbose_name = "Announcement"
-        verbose_name_plural = "Announcements"
+    def is_published(self):
+        """Check if announcement should be visible"""
+        if not self.is_active:
+            return False
+        if self.scheduled_publish and timezone.now() < self.scheduled_publish:
+            return False
+        if self.is_expired():
+            return False
+        return True
 
 
 class AnnouncementRead(models.Model):
-    """Track which parents have read announcements"""
-    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='reads')
+    """Track which users have read announcements"""
+    announcement = models.ForeignKey(
+        Announcement, 
+        on_delete=models.CASCADE, 
+        related_name='reads'
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     read_at = models.DateTimeField(auto_now_add=True)
     
@@ -155,36 +234,29 @@ class AnnouncementRead(models.Model):
         verbose_name_plural = "Announcement Reads"
 
 
-# ADDED: Missing model referenced in views
-class AnnouncementView(models.Model):
-    """Track announcement views"""
-    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='views')
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    viewed_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ['announcement', 'user']
-        verbose_name = "Announcement View"
-        verbose_name_plural = "Announcement Views"
+# ========================================
+# CHATBOT SYSTEM
+# ========================================
 
 class BotMessage(models.Model):
-    """Predetermined chatbot responses"""
+    """Predetermined chatbot responses for FAQs"""
     CATEGORY_CHOICES = [
         ('greeting', 'Greeting'),
-        ('faq', 'FAQ'),
+        ('faq', 'Frequently Asked Questions'),
         ('enrollment', 'Enrollment'),
-        ('grades', 'Grades'),
+        ('records', 'Student Records'),
         ('attendance', 'Attendance'),
-        ('payment', 'Payment'),
         ('schedule', 'Schedule'),
-        ('contact', 'Contact Info'),
+        ('contact', 'Contact Information'),
         ('general', 'General'),
     ]
     
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     
     # Trigger keywords (comma-separated)
-    keywords = models.TextField(help_text="Comma-separated keywords that trigger this response")
+    keywords = models.TextField(
+        help_text="Comma-separated keywords that trigger this response"
+    )
     
     # Response
     response_text = models.TextField()
@@ -207,111 +279,204 @@ class BotMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    def __str__(self):
-        return f"{self.category} - {self.keywords[:50]}"
-    
-    def get_keywords_list(self):
-        return [k.strip().lower() for k in self.keywords.split(',')]
-    
     class Meta:
         ordering = ['-priority', 'category']
         verbose_name = "Bot Message"
         verbose_name_plural = "Bot Messages"
-
-
-class ChatRoom(models.Model):
-    """Real-time chat between parent and teacher"""
-    parent = models.ForeignKey(Parent, on_delete=models.CASCADE, related_name='chat_rooms')
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='chat_rooms')
-    
-    # Room info
-    subject = models.CharField(max_length=200, blank=True)
-    
-    # Status
-    is_active = models.BooleanField(default=True)
-    is_archived = models.BooleanField(default=False)
-    
-    # Last activity
-    last_message_at = models.DateTimeField(null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"Chat: {self.parent.user.get_full_name()} ↔ {self.teacher.user.get_full_name()}"
+        return f"{self.category} - {self.keywords[:50]}"
     
-    def get_unread_count(self, user):
-        """Get unread message count for a specific user"""
-        return self.chatroom_messages.filter(is_read=False).exclude(sender=user).count()
-    
-    class Meta:
-        unique_together = ['parent', 'teacher']
-        ordering = ['-last_message_at']
-        verbose_name = "Chat Room"
-        verbose_name_plural = "Chat Rooms"
+    def get_keywords_list(self):
+        """Return list of keywords"""
+        return [k.strip().lower() for k in self.keywords.split(',')]
 
 
-class ChatRoomMessage(models.Model):
-    """Individual messages in a chat room (renamed to avoid conflict)"""
-    MESSAGE_TYPE_CHOICES = [
-        ('text', 'Text'),
-        ('image', 'Image'),
-        ('file', 'File'),
-        ('system', 'System Message'),
+# ========================================
+# CHATROOM SYSTEM (Parent-Teacher Communication)
+# ========================================
+
+class ChatConversation(models.Model):
+    """
+    Chat conversation between parent and teacher
+    Initiated when parent needs help beyond chatbot FAQs
+    """
+    STATUS_CHOICES = [
+        ('waiting', 'Waiting for Teacher'),
+        ('active', 'Active Conversation'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
     ]
     
-    chat_room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='chatroom_messages')
-    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    parent = models.ForeignKey(
+        Parent, 
+        on_delete=models.CASCADE, 
+        related_name='chat_conversations'
+    )
+    teacher = models.ForeignKey(
+        Teacher, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='chat_conversations'
+    )
+    child = models.ForeignKey(
+        Child, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='chat_conversations',
+        help_text="Specific child this conversation is about"
+    )
     
-    # Message content
-    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPE_CHOICES, default='text')
-    content = models.TextField()
+    subject = models.CharField(max_length=200)
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='waiting'
+    )
     
-    # Attachments
-    image = models.ImageField(upload_to='chat_images/', null=True, blank=True)
-    file = models.FileField(upload_to='chat_files/', null=True, blank=True)
-    
-    # Status
-    is_read = models.BooleanField(default=False)
-    read_at = models.DateTimeField(null=True, blank=True)
-    
-    # Edited
-    is_edited = models.BooleanField(default=False)
-    edited_at = models.DateTimeField(null=True, blank=True)
-    
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Track who's waiting for response
+    parent_waiting = models.BooleanField(default=False)
+    teacher_waiting = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = "Chat Conversation"
+        verbose_name_plural = "Chat Conversations"
+        indexes = [
+            models.Index(fields=['parent', '-updated_at']),
+            models.Index(fields=['teacher', 'status']),
+        ]
     
     def __str__(self):
-        return f"{self.sender.get_full_name()}: {self.content[:50]}"
+        teacher_name = self.teacher.user.get_full_name() if self.teacher else "Unassigned"
+        return f"Chat: {self.subject} - {self.parent.user.get_full_name()} ↔ {teacher_name}"
+    
+    def get_last_message(self):
+        """Get the most recent message"""
+        return self.messages.order_by('-timestamp').first()
+    
+    def mark_as_read_by_teacher(self):
+        """Mark all unread messages as read by teacher"""
+        self.messages.filter(
+            sender_role='parent', 
+            is_read=False
+        ).update(is_read=True, read_at=timezone.now())
+        
+        self.teacher_waiting = False
+        self.parent_waiting = True
+        self.save()
+    
+    def mark_as_read_by_parent(self):
+        """Mark all unread messages as read by parent"""
+        self.messages.filter(
+            sender_role='teacher', 
+            is_read=False
+        ).update(is_read=True, read_at=timezone.now())
+        
+        self.parent_waiting = False
+        self.teacher_waiting = True
+        self.save()
+    
+    def get_unread_count_for_parent(self):
+        """Get unread message count for parent"""
+        return self.messages.filter(
+            sender_role='teacher',
+            is_read=False
+        ).count()
+    
+    def get_unread_count_for_teacher(self):
+        """Get unread message count for teacher"""
+        return self.messages.filter(
+            sender_role='parent',
+            is_read=False
+        ).count()
+
+
+class ConversationMessage(models.Model):
+    """Individual messages in a chat conversation"""
+    SENDER_CHOICES = [
+        ('parent', 'Parent'),
+        ('teacher', 'Teacher'),
+        ('system', 'System'),
+        ('bot', 'Bot'),
+    ]
+    
+    conversation = models.ForeignKey(
+        ChatConversation, 
+        on_delete=models.CASCADE, 
+        related_name='messages'
+    )
+    sender_role = models.CharField(max_length=20, choices=SENDER_CHOICES)
+    sender_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Attachments (optional)
+    attachment = models.FileField(
+        upload_to='chat_attachments/', 
+        null=True, 
+        blank=True
+    )
+    
+    class Meta:
+        ordering = ['timestamp']
+        verbose_name = "Conversation Message"
+        verbose_name_plural = "Conversation Messages"
+        indexes = [
+            models.Index(fields=['conversation', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.sender_role}: {self.message[:50]}"
     
     def mark_as_read(self):
-        """Mark message as read"""
-        from django.utils import timezone
+        """Mark this message as read"""
         if not self.is_read:
             self.is_read = True
             self.read_at = timezone.now()
             self.save()
-    
-    class Meta:
-        ordering = ['created_at']
-        verbose_name = "Chat Room Message"
-        verbose_name_plural = "Chat Room Messages"
 
+
+# ========================================
+# NOTIFICATIONS
+# ========================================
 
 class Notification(models.Model):
     """Notification system for parents and teachers"""
     NOTIFICATION_TYPES = [
-        ('grade_posted', 'Grade Posted'),
+        ('competency_posted', 'Competency Record Posted'),
         ('attendance_alert', 'Attendance Alert'),
         ('new_announcement', 'New Announcement'),
         ('new_event', 'New Event'),
         ('new_message', 'New Message'),
-        ('payment_reminder', 'Payment Reminder'),
         ('general', 'General'),
     ]
     
-    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    recipient = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='notifications'
+    )
+    notification_type = models.CharField(
+        max_length=30, 
+        choices=NOTIFICATION_TYPES
+    )
     
     title = models.CharField(max_length=200)
     message = models.TextField()
@@ -325,150 +490,34 @@ class Notification(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     
-    def __str__(self):
-        return f"{self.recipient.get_full_name()} - {self.title}"
-    
-    def mark_as_read(self):
-        from django.utils import timezone
-        if not self.is_read:
-            self.is_read = True
-            self.read_at = timezone.now()
-            self.save()
-    
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Notification"
         verbose_name_plural = "Notifications"
-
+        indexes = [
+            models.Index(fields=['recipient', '-created_at']),
+            models.Index(fields=['recipient', 'is_read']),
+        ]
+    
+    def __str__(self):
+        return f"{self.recipient.get_full_name()} - {self.title}"
+    
+    def mark_as_read(self):
+        """Mark notification as read"""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save()
 
 
 # ========================================
-# LIVE CHAT SYSTEM (Parent-Teacher Chat)
+# ACTIVITY LOG
 # ========================================
-
-class ChatConversation(models.Model):
-    """Chat conversation between parent and teacher"""
-    
-    STATUS_CHOICES = [
-        ('waiting', 'Waiting for Teacher'),
-        ('active', 'Active Conversation'),
-        ('resolved', 'Resolved'),
-        ('closed', 'Closed'),
-    ]
-    
-    parent = models.ForeignKey(Parent, on_delete=models.CASCADE, related_name='chat_conversations')
-    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='chat_conversations')
-    child = models.ForeignKey(Child, on_delete=models.CASCADE, null=True, blank=True, related_name='chat_conversations')
-    
-    subject = models.CharField(max_length=200)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='waiting')
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    assigned_at = models.DateTimeField(null=True, blank=True)
-    resolved_at = models.DateTimeField(null=True, blank=True)
-    
-    # Track if parent is waiting for response
-    parent_waiting = models.BooleanField(default=True)
-    teacher_waiting = models.BooleanField(default=False)
-    
-    class Meta:
-        ordering = ['-updated_at']
-        
-    def __str__(self):
-        return f"Chat: {self.subject} - {self.parent.user.get_full_name()}"
-    
-    def get_last_message(self):
-        return self.conversation_messages.order_by('-timestamp').first()
-    
-    def mark_as_read_by_teacher(self):
-        """Mark all unread messages as read by teacher"""
-        self.conversation_messages.filter(sender_role='parent', is_read=False).update(is_read=True)
-        self.teacher_waiting = False
-        self.parent_waiting = True
-        self.save()
-    
-    def mark_as_read_by_parent(self):
-        """Mark all unread messages as read by parent"""
-        self.conversation_messages.filter(sender_role='teacher', is_read=False).update(is_read=True)
-        self.parent_waiting = False
-        self.teacher_waiting = True
-        self.save()
-
-
-class ConversationMessage(models.Model):
-    """Individual messages in a live chat conversation"""
-    
-    SENDER_CHOICES = [
-        ('parent', 'Parent'),
-        ('teacher', 'Teacher'),
-        ('system', 'System'),
-        ('bot', 'Bot'),
-    ]
-    
-    conversation = models.ForeignKey(ChatConversation, on_delete=models.CASCADE, related_name='conversation_messages')
-    sender_role = models.CharField(max_length=20, choices=SENDER_CHOICES)
-    sender_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    
-    # Attachments (optional)
-    attachment = models.FileField(upload_to='chat_attachments/', null=True, blank=True)
-    
-    class Meta:
-        ordering = ['timestamp']
-    
-    def __str__(self):
-        return f"{self.sender_role}: {self.message[:50]}"
-
-
-class TeacherAvailability(models.Model):
-    """Track teacher availability for chat"""
-    
-    STATUS_CHOICES = [
-        ('online', 'Online'),
-        ('busy', 'Busy'),
-        ('offline', 'Offline'),
-    ]
-    
-    teacher = models.OneToOneField(Teacher, on_delete=models.CASCADE, related_name='chat_availability')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
-    
-    # Maximum concurrent conversations
-    max_conversations = models.IntegerField(default=3)
-    current_conversations = models.IntegerField(default=0)
-    
-    # Auto-response message when busy
-    auto_response = models.TextField(blank=True, default="I'm currently assisting other parents. I'll respond to you shortly!")
-    
-    last_active = models.DateTimeField(auto_now=True)
-    
-    def __str__(self):
-        return f"{self.teacher.user.get_full_name()} - {self.status}"
-    
-    def is_available(self):
-        """Check if teacher can accept new conversations"""
-        return self.status == 'online' and self.current_conversations < self.max_conversations
-    
-    def increment_conversations(self):
-        self.current_conversations += 1
-        self.save()
-    
-    def decrement_conversations(self):
-        if self.current_conversations > 0:
-            self.current_conversations -= 1
-        self.save()
-
-
-
 
 class Activity(models.Model):
     """Track user activities for recent activity feed"""
-    
     ACTIVITY_TYPES = [
-        ('grade', 'Grade Entry'),
+        ('competency', 'Competency Record Entry'),
         ('attendance', 'Attendance Record'),
         ('announcement', 'Announcement'),
         ('message', 'Message Sent'),
@@ -483,6 +532,8 @@ class Activity(models.Model):
     activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
     description = models.TextField()
     timestamp = models.DateTimeField(default=timezone.now)
+    
+    # Optional link to related object
     related_object_id = models.IntegerField(null=True, blank=True)
     related_object_type = models.CharField(max_length=50, null=True, blank=True)
     

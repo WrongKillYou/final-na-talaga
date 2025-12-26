@@ -145,7 +145,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     Cancel
                 </button>
-                <form method="post" action="{% url 'information:announcement_delete' announcement.id %}" class="d-inline">
+                <form method="post" action="{% url 'information:delete_announcement' announcement.id %}" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">
                         <i class="bi bi-trash"></i> Delete

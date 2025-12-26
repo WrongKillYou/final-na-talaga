@@ -3,78 +3,156 @@
 
 {% block title %}Parent Dashboard{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/chatbot.css' %}">
+<style>
+    /* Add parent-dashboard class for chatbot initialization */
+    body {
+        position: relative;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+<div class="parent-dashboard">
+
 <!-- Welcome Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2>Welcome back, {{ parent.user.get_full_name }}!</h2>
-        <p class="text-muted">
+        <h2>Welcome back, {{ parent.user.get_full_name }}! 👋</h2>
+        <p class="text-muted mb-0">
             <i class="bi bi-envelope"></i> {{ parent.parent_email }}
             <span class="mx-2">|</span>
             <i class="bi bi-phone"></i> {{ parent.parent_contact }}
         </p>
     </div>
-    <a href="{% url 'users:parent_profile' %}" class="btn btn-outline-primary">
-        <i class="bi bi-person-circle"></i> View Profile
-    </a>
+    <div class="btn-group">
+        <a href="{% url 'users:parent_profile' %}" class="btn btn-outline-primary">
+            <i class="bi bi-person-circle"></i> View Profile
+        </a>
+        <a href="{% url 'information:notification_list' %}" class="btn btn-outline-info">
+            <i class="bi bi-bell"></i> Notifications
+        </a>
+    </div>
 </div>
 
-<!-- Children Cards -->
+<!-- Quick Stats Summary -->
+{% if children_data %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-0">{{ children_data|length }}</h4>
+                        <small>My Children</small>
+                    </div>
+                    <i class="bi bi-people-fill" style="font-size: 2.5rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-0">
+                            {% widthratio children_data|length children_data|length 1 %}
+                        </h4>
+                        <small>Active Quarter {{ current_quarter }}</small>
+                    </div>
+                    <i class="bi bi-calendar-check" style="font-size: 2.5rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-0">{{ announcements.count }}</h4>
+                        <small>New Announcements</small>
+                    </div>
+                    <i class="bi bi-megaphone-fill" style="font-size: 2.5rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-0">{{ events.count }}</h4>
+                        <small>Upcoming Events</small>
+                    </div>
+                    <i class="bi bi-calendar-event" style="font-size: 2.5rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Children Section -->
 <h4 class="mb-3">
-    <i class="bi bi-people-fill"></i> My Children ({{ children_data|length }})
+    <i class="bi bi-people-fill"></i> My Children 
+    <span class="badge bg-primary">{{ children_data|length }}</span>
 </h4>
 
 <div class="row g-4 mb-5">
     {% for child_data in children_data %}
         {% with child=child_data.child %}
         <div class="col-md-6 col-lg-4">
-            <div class="card h-100 shadow-sm">
+            <div class="card h-100 shadow-sm hover-card">
                 <div class="card-body">
-                    <!-- Child Header with Photo -->
+
+                    <!-- Child Header -->
                     <div class="d-flex align-items-center mb-3">
                         {% if child.photo %}
-                            <img src="{{ child.photo.url }}" 
-                                 class="rounded-circle me-3" 
-                                 width="60" height="60" 
+                            <img src="{{ child.photo.url }}"
+                                 class="rounded-circle me-3"
+                                 width="60" height="60"
                                  alt="{{ child.get_full_name }}"
                                  style="object-fit: cover;">
                         {% else %}
-                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" 
+                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
                                  style="width: 60px; height: 60px; font-size: 1.5rem;">
                                 {{ child.first_name.0 }}{{ child.last_name.0 }}
                             </div>
                         {% endif %}
-                        
+
                         <div class="flex-grow-1">
                             <h5 class="mb-0">{{ child.get_full_name }}</h5>
                             <small class="text-muted">
-                                <i class="bi bi-bookmark"></i> LRN: {{ child.lrn }}
-                            </small>
-                            <br>
+                                <i class="bi bi-bookmark"></i> {{ child.lrn }}
+                            </small><br>
                             <small class="text-muted">
-                                <i class="bi bi-mortarboard"></i> 
-                                {{ child.grade_level|title }} - {{ child.section }}
+                                <i class="bi bi-mortarboard"></i>
+                                {{ child.grade_level|title }}
+                                {% if child.section %}- {{ child.section }}{% endif %}
                             </small>
                         </div>
                     </div>
-                    
+
                     <!-- Quick Stats -->
                     <div class="row text-center mb-3">
                         <div class="col-6">
                             <div class="border rounded p-2">
                                 <div class="h4 mb-0 text-primary">
-                                    {{ child_data.current_average|floatformat:1|default:"—" }}
+                                    {{ child_data.consistent_count }}/{{ child_data.total_competencies }}
                                 </div>
-                                <small class="text-muted">Avg Grade</small>
+                                <small class="text-muted">Consistent</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="border rounded p-2">
-                                <div class="h4 mb-0 
+                                <div class="h4 mb-0
                                     {% if child_data.attendance_rate >= 95 %}text-success
                                     {% elif child_data.attendance_rate >= 85 %}text-warning
                                     {% else %}text-danger{% endif %}">
@@ -84,355 +162,228 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Attendance Progress Bar -->
+
+                    <!-- Competency Progress -->
                     <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-muted">Q{{ current_quarter }} Progress</small>
+                            <small class="text-muted">
+                                {{ child_data.assessed_competencies }}/{{ child_data.total_competencies }}
+                            </small>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-success"
+                                 role="progressbar"
+                                 style="width: {{ child_data.competency_progress }}%"
+                                 aria-valuenow="{{ child_data.competency_progress }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ child_data.competency_progress }}% Consistent</small>
+                    </div>
+
+                    <!-- Attendance This Month -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
                             <small class="text-muted">This Month</small>
                             <small class="text-muted">
                                 {{ child_data.present_days }}/{{ child_data.total_days }} days
                             </small>
                         </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar 
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar
                                 {% if child_data.attendance_rate >= 95 %}bg-success
                                 {% elif child_data.attendance_rate >= 85 %}bg-warning
-                                {% else %}bg-danger{% endif %}" 
-                                 style="width: {{ child_data.attendance_rate }}%">
+                                {% else %}bg-danger{% endif %}"
+                                role="progressbar"
+                                style="width: {{ child_data.attendance_rate }}%"
+                                aria-valuenow="{{ child_data.attendance_rate }}"
+                                aria-valuemin="0"
+                                aria-valuemax="100">
                             </div>
                         </div>
-                    </div>      
-                    
-                    <!-- Recent Grades -->
-                    <div class="mb-3">
-                        <h6 class="text-muted mb-2">
-                            <i class="bi bi-card-list"></i> Recent Grades
-                        </h6>
-                        {% if child_data.latest_grades %}
-                            <ul class="list-group list-group-flush">
-                                {% for grade in child_data.latest_grades|slice:":3" %}
-                                    <li class="list-group-item px-0 py-1 d-flex justify-content-between align-items-center">
-                                        <small>{{ grade.class_obj.subject|truncatewords:2 }}</small>
-                                        <span class="badge rounded-pill
-                                            {% if grade.final_grade >= 90 %}bg-success
-                                            {% elif grade.final_grade >= 75 %}bg-primary
-                                            {% else %}bg-danger{% endif %}">
-                                            {{ grade.final_grade|floatformat:0 }}
-                                        </span>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p class="text-muted small mb-0">No grades posted yet</p>
-                        {% endif %}
                     </div>
-                    
-                    <!-- View Details Button -->
-                    <a href="{% url 'users:child_detail' child.id %}" class="btn btn-outline-primary btn-sm w-100">
-                        <i class="bi bi-eye"></i> View Full Details
-                    </a>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'monitoring:download_report_card' child.id current_quarter %}"
+                           class="btn btn-success btn-sm">
+                            <i class="bi bi-download"></i> Download Report Card Q{{ current_quarter }}
+                        </a>
+                        <a href="{% url 'users:child_detail' child.id %}"
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-eye"></i> View Full Details
+                        </a>
+                    </div>
+
                 </div>
             </div>
         </div>
         {% endwith %}
     {% empty %}
         <div class="col-12">
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i>
-                No children registered under your account. 
-                Please contact the school administrator.
+            <div class="alert alert-info text-center">
+                <i class="bi bi-info-circle fs-1"></i>
+                <h5 class="mt-3">No children registered yet</h5>
+                <p class="mb-0">Please contact the school administration to enroll your child.</p>
             </div>
         </div>
     {% endfor %}
 </div>
 
-<!-- Announcements Section -->
-<div class="row">
+<!-- Announcements & Events Row -->
+<div class="row g-4 mb-5">
+
+    <!-- Announcements -->
     <div class="col-lg-8">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-megaphone-fill text-primary"></i> Latest Announcements
-                    </h5>
-                    <a href="{% url 'information:announcement_list' %}" class="btn btn-sm btn-outline-primary">
-                        View All
-                    </a>
-                </div>
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-megaphone-fill text-primary"></i> Latest Announcements
+                </h5>
+                <a href="{% url 'information:announcement_list' %}"
+                   class="btn btn-sm btn-outline-primary">
+                    View All <i class="bi bi-arrow-right"></i>
+                </a>
             </div>
             <div class="card-body">
                 {% if announcements %}
-                    {% for announcement in announcements|slice:":2" %}
+                    {% for announcement in announcements %}
                         <div class="mb-3 pb-3 {% if not forloop.last %}border-bottom{% endif %}">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-1">{{ announcement.title }}</h6>
-                                    <p class="mb-1 text-muted">
+                                    <h6 class="mb-1">
+                                        {{ announcement.title }}
+                                        {% if announcement.is_important %}
+                                            <span class="badge bg-danger">Important</span>
+                                        {% endif %}
+                                    </h6>
+                                    <p class="text-muted mb-2">
                                         {{ announcement.content|truncatewords:30 }}
                                     </p>
                                     <small class="text-muted">
-                                        <i class="bi bi-calendar"></i> 
+                                        <i class="bi bi-calendar"></i>
                                         {{ announcement.publish_date|timesince }} ago
                                         {% if announcement.teacher %}
-                                            | By {{ announcement.teacher.user.get_full_name }}
+                                            | <i class="bi bi-person"></i> {{ announcement.teacher.user.get_full_name }}
                                         {% endif %}
                                     </small>
                                 </div>
-                                {% if announcement.priority == 'high' or announcement.priority == 'urgent' %}
-                                    <span class="badge bg-danger ms-2">Important</span>
-                                {% endif %}
+                                <a href="{% url 'information:announcement_detail' announcement.id %}" 
+                                   class="btn btn-sm btn-outline-primary ms-2">
+                                    <i class="bi bi-eye"></i>
+                                </a>
                             </div>
                         </div>
                     {% endfor %}
                 {% else %}
-                    <p class="text-muted mb-0">No announcements at this time.</p>
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                        <p class="mt-2 mb-0">No announcements available at the moment.</p>
+                    </div>
                 {% endif %}
             </div>
         </div>
     </div>
-    
-    <!-- Upcoming Events Sidebar -->
+
+    <!-- Events -->
     <div class="col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="bi bi-calendar-event text-success"></i> Upcoming Events
                 </h5>
+                <a href="{% url 'information:event_list' %}"
+                   class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-arrow-right"></i>
+                </a>
             </div>
             <div class="card-body">
                 {% if events %}
                     <ul class="list-unstyled mb-0">
-                        {% for event in events|slice:":4" %}
-                            <li class="mb-3">
-                                <div class="d-flex">
-                                    <div class="me-3 text-center">
-                                        <div class="bg-primary text-white rounded px-2 py-1" style="min-width: 50px;">
-                                            <div class="fw-bold">{{ event.start_date|date:"d" }}</div>
-                                            <small>{{ event.start_date|date:"M" }}</small>
-                                        </div>
+                        {% for event in events %}
+                            <li class="mb-3 d-flex align-items-start">
+                                <div class="me-3 text-center flex-shrink-0">
+                                    <div class="bg-primary text-white rounded px-2 py-1" style="min-width: 50px;">
+                                        <div class="fw-bold">{{ event.start_date|date:"d" }}</div>
+                                        <small style="font-size: 0.75rem;">{{ event.start_date|date:"M" }}</small>
                                     </div>
-                                    <div>
-                                        <h6 class="mb-0">{{ event.title }}</h6>
-                                        <small class="text-muted">{{ event.event_type|capfirst }}</small>
-                                    </div>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ event.title }}</h6>
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock"></i> {{ event.start_time|time:"g:i A"|default:"All Day" }}
+                                    </small><br>
+                                    <small class="text-muted">
+                                        <i class="bi bi-geo-alt"></i> {{ event.location }}
+                                    </small>
                                 </div>
                             </li>
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <p class="text-muted mb-0">No upcoming events.</p>
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-calendar-x" style="font-size: 3rem;"></i>
+                        <p class="mt-2 mb-0">No upcoming events.</p>
+                    </div>
                 {% endif %}
             </div>
         </div>
     </div>
-</div>
-    
-    <!-- Upcoming Events Sidebar -->
-    <div class="col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-calendar-event text-success"></i> Upcoming Events
-                </h5>
-            </div>
-            <div class="card-body">
-                {% if event %}
-                    <ul class="list-unstyled mb-0">
-                        {% for event in events|slice:":4" %}
-                            <li class="mb-3">
-                                <div class="d-flex">
-                                    <div class="me-3 text-center">
-                                        <div class="bg-primary text-white rounded px-2 py-1" style="min-width: 50px;">
-                                            <div class="fw-bold">{{ event.start_date|date:"d" }}</div>
-                                            <small>{{ event.start_date|date:"M" }}</small>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h6 class="mb-0">{{ event.title }}</h6>
-                                        <small class="text-muted">{{ event.event_type|capfirst }}</small>
-                                    </div>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted mb-0">No upcoming events.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+
 </div>
 
-<!-- Chatbot Toggle Button -->
-<button id="chatbotToggle" class="chatbot-toggle" aria-label="Open Chatbot">
-    <i class="bi bi-chat-dots-fill"></i>
-    <span class="chatbot-badge" id="chatbotBadge">0</span>
-</button>
-
-<!-- Chatbot Window -->
-<div id="chatbotWindow" class="chatbot-window">
-    <!-- Chatbot Header -->
-    <div class="chatbot-header">
-        <div class="d-flex align-items-center">
-            <div class="chatbot-avatar">
-                <i class="bi bi-robot"></i>
-            </div>
-            <div class="ms-2">
-                <h6 class="mb-0">School Assistant</h6>
-                <small class="text-white-50">Ask me anything!</small>
-            </div>
-        </div>
-        <button id="chatbotClose" class="btn btn-sm text-white">
-            <i class="bi bi-x-lg"></i>
-        </button>
+<!-- Quick Actions Card -->
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h5 class="mb-0">
+            <i class="bi bi-lightning-fill text-warning"></i> Quick Actions
+        </h5>
     </div>
-    
-    <!-- Quick Actions Tabs -->
-    <div class="chatbot-tabs">
-        <button class="chatbot-tab active" data-tab="chat">
-            <i class="bi bi-chat-left-text"></i> Chat
-        </button>
-        <button class="chatbot-tab" data-tab="live-chat">
-            <i class="bi bi-person-video2"></i> Ask Teacher
-            <span class="chat-notification" id="liveChatNotification" style="display: none;"></span>
-        </button>
-        <button class="chatbot-tab" data-tab="announcements">
-            <i class="bi bi-megaphone"></i> News
-        </button>
-        <button class="chatbot-tab" data-tab="events">
-            <i class="bi bi-calendar-event"></i> Events
-        </button>
-        <button class="chatbot-tab" data-tab="faq">
-            <i class="bi bi-question-circle"></i> FAQ
-        </button>
-    </div>
-    
-    <!-- Tab Contents -->
-    <div class="chatbot-tab-content">
-        <!-- Chat Tab -->
-        <div class="tab-pane active" id="chatTab">
-            <!-- Chat Messages -->
-            <div id="chatbotMessages" class="chatbot-messages">
-                <div class="chatbot-message bot-message">
-                    <div class="message-avatar">
-                        <i class="bi bi-robot"></i>
-                    </div>
-                    <div class="message-content">
-                        <p>Hello! 👋 I'm your School Assistant. How can I help you today?</p>
-                        <div class="quick-replies">
-                            <button class="quick-reply" data-action="schedule">
-                                📚 Class Schedule
-                            </button>
-                            <button class="quick-reply" data-action="announcements">
-                                📢 Announcements
-                            </button>
-                            <button class="quick-reply" data-action="events">
-                                📅 Events
-                            </button>
-                        </div>
-                    </div>
-                </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <a href="{% url 'information:chat_history' %}" class="btn btn-outline-primary w-100">
+                    <i class="bi bi-chat-left-text fs-4 d-block mb-2"></i>
+                    Message History
+                </a>
             </div>
-            
-            <!-- Chat Input -->
-            <div class="chatbot-input">
-                <input type="text" 
-                       id="chatbotMessageInput" 
-                       placeholder="Type your message..." 
-                       autocomplete="off">
-                <button id="chatbotSend" class="chatbot-send-btn">
-                    <i class="bi bi-send-fill"></i>
-                </button>
+            <div class="col-md-3">
+                <a href="{% url 'information:announcement_list' %}" class="btn btn-outline-info w-100">
+                    <i class="bi bi-megaphone fs-4 d-block mb-2"></i>
+                    All Announcements
+                </a>
             </div>
-        </div>
-
-        <!-- Live Chat Tab -->
-        <div class="tab-pane" id="liveChatTab">
-            <div id="liveChatContainer" class="chatbot-messages">
-                <!-- Loading state -->
-                <div id="liveChatLoading" class="loading-spinner">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-                
-                <!-- No active conversation -->
-                <div id="noActiveChat" style="display: none;">
-                    <div class="text-center p-4">
-                        <i class="bi bi-chat-left-dots" style="font-size: 3rem; color: #ccc;"></i>
-                        <h6 class="mt-3">Start a conversation with a teacher</h6>
-                        <p class="text-muted small">Select a child and type your question</p>
-                        
-                        <div id="childSelectorForChat" class="mb-3">
-                            <label class="form-label small">Select Child (Optional)</label>
-                            <select class="form-select form-select-sm" id="liveChatChildSelect">
-                                <option value="">General Question</option>
-                            </select>
-                        </div>
-                        
-                        <textarea class="form-control mb-2" id="initialMessage" rows="3" placeholder="Type your question here..."></textarea>
-                        <button class="btn btn-primary btn-sm w-100" id="startLiveChatBtn">
-                            <i class="bi bi-send"></i> Start Conversation
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Active conversation -->
-                <div id="activeChat" style="display: none;">
-                    <div id="liveChatMessages" class="live-chat-messages"></div>
-                </div>
+            <div class="col-md-3">
+                <a href="{% url 'information:event_list' %}" class="btn btn-outline-success w-100">
+                    <i class="bi bi-calendar-event fs-4 d-block mb-2"></i>
+                    All Events
+                </a>
             </div>
-            
-            <!-- Chat Input (for active conversation) -->
-            <div class="chatbot-input" id="liveChatInputArea" style="display: none;">
-                <input type="text" 
-                       id="liveChatMessageInput" 
-                       placeholder="Type your message..." 
-                       autocomplete="off">
-                <button id="liveChatSend" class="chatbot-send-btn">
-                    <i class="bi bi-send-fill"></i>
-                </button>
-                <button id="closeLiveChatBtn" class="btn btn-sm btn-outline-danger ms-2" title="End conversation">
-                    <i class="bi bi-x-circle"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Announcements Tab -->
-        <div class="tab-pane" id="announcementsTab">
-            <div class="chatbot-messages">
-                <div class="loading-spinner">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Events Tab -->
-        <div class="tab-pane" id="eventsTab">
-            <div class="chatbot-messages">
-                <div class="loading-spinner">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- FAQ Tab -->
-        <div class="tab-pane" id="faqTab">
-            <div class="chatbot-messages">
-                <div class="faq-list" id="faqList">
-                    <!-- FAQ items will be loaded here -->
-                </div>
+            <div class="col-md-3">
+                <a href="{% url 'information:notification_list' %}" class="btn btn-outline-warning w-100">
+                    <i class="bi bi-bell fs-4 d-block mb-2"></i>
+                    Notifications
+                </a>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Link external CSS and JS -->
-<link rel="stylesheet" href="{% static 'css/chatbot.css' %}">
+</div>
+<!-- Chatbot will be automatically injected here by JavaScript -->
+{% endblock %}
+
+{% block extra_js %}
 <script src="{% static 'js/chatbot.js' %}"></script>
-
+<style>
+    .hover-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+</style>
 {% endblock %}

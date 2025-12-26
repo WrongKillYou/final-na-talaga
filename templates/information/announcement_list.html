@@ -138,7 +138,7 @@
                                                 
                                                 <!-- Teacher Actions -->
                                                 {% if user.role == 'teacher' and announcement.teacher.id == user.teacher_profile.id %}
-                                                    <a href="{% url 'information:announcement_edit' announcement.id %}" class="btn btn-sm btn-outline-warning">
+                                                    <a href="{% url 'information:edit_announcement' announcement.id %}" class="btn btn-sm btn-outline-warning">
                                                         <i class="bi bi-pencil"></i> Edit
                                                     </a>
                                                     <button type="button" class="btn btn-sm btn-outline-danger" 
@@ -178,7 +178,7 @@
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                                     <i class="bi bi-x-circle"></i> Cancel
                                 </button>
-                                <form method="post" action="{% url 'information:announcement_delete' announcement.id %}" style="display: inline;">
+                                <form method="post" action="{% url 'information:delete_announcement' announcement.id %}" style="display: inline;">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-danger">
                                         <i class="bi bi-trash"></i> Delete Announcement

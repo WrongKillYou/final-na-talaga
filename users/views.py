@@ -1,12 +1,15 @@
-from itertools import count
+# users/views.py
+# CORRECTED - Removed FinalGrade references, using competency system
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout as django_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Avg, Q, Count
-from monitoring.models import FinalGrade, Attendance
-from datetime import datetime, timedelta
-from .models import Teacher, Parent, Child
+from datetime import datetime, timedelta, date
+from django.utils import timezone
+
+from .models import Teacher, Parent, Child, User
 from .forms import (
     TeacherLoginForm, 
     ParentLoginForm,
@@ -14,17 +17,79 @@ from .forms import (
     TeacherProfileUpdateForm
 )
 from .decorators import teacher_required, parent_required
-from monitoring.models import Class, Enrollment, FinalGrade, Attendance
-from information.models import Announcement, Event
-import requests
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.conf import settings
-import json
+
+# Import monitoring models
+from monitoring.models import (
+    Class, Enrollment, Attendance, 
+    QuarterlyCompetencyRecord, Domain, QuarterlySummary
+)
+from information.models import Announcement, Event, Activity
+
+
+# ========================================
+# HELPER FUNCTIONS
+# ========================================
+
+def get_current_quarter():
+    """Helper function to determine current quarter based on date"""
+    month = datetime.now().month
+    
+    # Philippine school year quarters (adjust if needed)
+    if month in [6, 7, 8]:
+        return 1  # 1st Quarter (June-August)
+    elif month in [9, 10, 11]:
+        return 2  # 2nd Quarter (September-November)
+    elif month in [12, 1, 2]:
+        return 3  # 3rd Quarter (December-February)
+    else:  # [3, 4, 5]
+        return 4  # 4th Quarter (March-May)
+
+
+def get_attendance_stats(child, start_date=None, end_date=None):
+    """Helper function to calculate attendance statistics for a child"""
+    if not end_date:
+        end_date = date.today()
+    
+    if not start_date:
+        start_date = end_date.replace(day=1)
+    
+    # Get attendance records for the period
+    attendance_records = Attendance.objects.filter(
+        child=child,
+        date__gte=start_date,
+        date__lte=end_date
+    )
+    
+    # Count different statuses
+    total_days = attendance_records.count()
+    present_days = attendance_records.filter(status='present').count()
+    absent_days = attendance_records.filter(status='absent').count()
+    late_days = attendance_records.filter(status='late').count()
+    excused_days = attendance_records.filter(status='excused').count()
+    
+    # Calculate attendance rate
+    attendance_rate = 0
+    if total_days > 0:
+        attendance_rate = round((present_days / total_days) * 100, 1)
+    
+    return {
+        'total_days': total_days,
+        'present_days': present_days,
+        'absent_days': absent_days,
+        'late_days': late_days,
+        'excused_days': excused_days,
+        'attendance_rate': attendance_rate,
+    }
+
 
 # ========================================
 # Login Selection & Common Views
 # ========================================
+
+def landing_page(request):
+    """Landing page for the system"""
+    return render(request, 'users/landing_page.html')
+
 
 def login_selection(request):
     """Main login page - user selects role (Parent or Teacher)"""
@@ -49,6 +114,7 @@ def logout_view(request):
     django_logout(request)
     messages.success(request, 'You have been logged out successfully.')
     return redirect('users:landing_page')
+
 
 # ========================================
 # Teacher Authentication & Dashboard
@@ -83,16 +149,13 @@ def teacher_login(request):
 @login_required
 @teacher_required
 def teacher_dashboard(request):
-    """Teacher dashboard"""
-    if request.user.role != 'teacher':
-        messages.error(request, 'Access denied.')
-        return redirect('users:login_selection')
-    
+    """Teacher dashboard with competency-based statistics"""
     teacher = request.user.teacher_profile
     
     # Get teacher's classes
     classes = Class.objects.filter(
-        teacher=teacher
+        teacher=teacher,
+        is_active=True
     ).annotate(
         student_count=Count('enrollments')
     )
@@ -101,54 +164,75 @@ def teacher_dashboard(request):
     total_classes = classes.count()
     total_students = sum(c.student_count for c in classes)
     
-    # Count pending grades (students without grades for current quarter)
+    # Count pending competency records (students without records for current quarter)
     current_quarter = get_current_quarter()
-    pending_grades = 0
+    pending_records = 0
+    
     for class_obj in classes:
-        enrolled_students = Enrollment.objects.filter(class_obj=class_obj).count()
-        graded_students = FinalGrade.objects.filter(
+        enrolled_students = Enrollment.objects.filter(
             class_obj=class_obj,
-            quarter=current_quarter
+            is_active=True
         ).count()
-        pending_grades += (enrolled_students - graded_students)
+        
+        # Count how many students have at least one competency record for this quarter
+        students_with_records = QuarterlyCompetencyRecord.objects.filter(
+            child__enrollments__class_obj=class_obj,
+            quarter=current_quarter
+        ).values('child').distinct().count()
+        
+        pending_records += (enrolled_students - students_with_records)
     
     # Get teacher's announcements
     try:
         my_announcements = Announcement.objects.filter(
-            teacher=teacher
+            teacher=teacher,
+            is_active=True
         ).order_by('-publish_date')[:5]
-        announcements_count = Announcement.objects.filter(teacher=teacher).count()
+        announcements_count = Announcement.objects.filter(
+            teacher=teacher
+        ).count()
     except:
         my_announcements = []
         announcements_count = 0
     
-    # Get today's classes (simplified - returns first 3 classes)
+    # Get today's classes (first 3 classes)
     todays_classes = classes[:3] if classes.exists() else []
     
-    # Recent activity (placeholder - implement when Activity model exists)
-    recent_activities = []
+    # Recent activity
+    recent_activities = Activity.objects.filter(
+        user=request.user
+    ).order_by('-timestamp')[:5]
     
-    # Count missing attendance (placeholder - implement your logic)
+    # Count missing attendance for today
+    today = date.today()
     missing_attendance = 0
-    
-    # Upcoming deadlines (placeholder - implement when Deadline model exists)
-    upcoming_deadlines = []
+    for class_obj in classes:
+        enrolled_count = Enrollment.objects.filter(
+            class_obj=class_obj,
+            is_active=True
+        ).count()
+        recorded_count = Attendance.objects.filter(
+            class_obj=class_obj,
+            date=today
+        ).count()
+        missing_attendance += max(0, enrolled_count - recorded_count)
     
     context = {
         'teacher': teacher,
-        'classes': classes[:5],  # Show first 5 classes
+        'classes': classes[:5],
         'total_classes': total_classes,
         'total_students': total_students,
-        'pending_grades': pending_grades,
+        'pending_records': pending_records,
         'announcements_count': announcements_count,
         'my_announcements': my_announcements,
         'todays_classes': todays_classes,
         'recent_activities': recent_activities,
         'missing_attendance': missing_attendance,
-        'upcoming_deadlines': upcoming_deadlines,
     }
     
     return render(request, 'users/teacher_dashboard.html', context)
+
+
 # ========================================
 # Parent Authentication & Dashboard
 # ========================================
@@ -179,297 +263,81 @@ def parent_login(request):
     })
 
 
-def get_attendance_stats(child, start_date=None, end_date=None):
-    """
-    Helper function to calculate attendance statistics for a child
-    """
-    if not end_date:
-        end_date = timedelta.localdate()
-    
-    if not start_date:
-        start_date = end_date.replace(day=1)
-    
-    # Get attendance records for the period
-    attendance_records = Attendance.objects.filter(
-        child=child,
-        date__gte=start_date,
-        date__lte=end_date
-    )
-    
-    # Count different statuses
-    total_days = attendance_records.count()
-    present_days = attendance_records.filter(status='present').count()
-    absent_days = attendance_records.filter(status='absent').count()
-    late_days = attendance_records.filter(status='late').count()
-    excused_days = attendance_records.filter(status='excused').count()
-    
-    # Calculate attendance rate
-    attendance_rate = 0
-    if total_days > 0:
-        attendance_rate = round((present_days / total_days) * 100, 1)
-    
-    return {
-        'total_days': total_days,
-        'present_days': present_days,
-        'absent_days': absent_days,
-        'late_days': late_days,
-        'excused_days': excused_days,
-        'attendance_rate': attendance_rate,
-    }
-
-
-@login_required
-def parent_dashboard(request):
-    """Parent dashboard with children info"""
-    # Check if user is a parent
-    if request.user.role != 'parent':
-        messages.error(request, 'Access denied.')
-        return redirect('users:login_selection')
-    
-    # Get parent profile
-    try:
-        parent = request.user.parent_profile
-    except Parent.DoesNotExist:
-        messages.error(request, 'Parent profile not found.')
-        return redirect('users:login_selection')
-    
-    # Get all children
-    children = parent.children.all()
-    
-    # Prepare data for each child
-    children_data = []
-    
-    for child in children:
-        # ========== GET LATEST GRADES ==========
-        latest_grades = FinalGrade.objects.filter(
-            student=child
-        ).select_related('class_obj').order_by('-quarter', '-created_at')[:3]
-        
-        # ========== CALCULATE CURRENT AVERAGE ==========
-        current_quarter = get_current_quarter()
-        current_average = FinalGrade.objects.filter(
-            student=child,
-            quarter=current_quarter
-        ).aggregate(Avg('final_grade'))['final_grade__avg']
-        
-        # ========== GET ATTENDANCE STATS (LAST 30 DAYS) ==========
-        thirty_days_ago = datetime.now().date() - timedelta(days=30)
-        
-        # Query attendance records
-        attendance_records = Attendance.objects.filter(
-            child=child,
-            date__gte=thirty_days_ago
-        )
-        
-        # Count days
-        total_days = attendance_records.count()
-        present_days = attendance_records.filter(
-            Q(status='present') | Q(status='late')
-        ).count()
-        
-        # Calculate attendance rate (with safety check)
-        if total_days > 0:
-            attendance_rate = round((present_days / total_days * 100), 1)
-        else:
-            attendance_rate = 0  # Default if no attendance records
-        
-        # ========== BUILD DICTIONARY ==========
-        children_data.append({
-            'child': child,
-            'latest_grades': latest_grades,
-            'current_average': round(current_average, 2) if current_average else None,
-            'attendance_rate': attendance_rate,
-            'present_days': present_days,
-            'total_days': total_days,
-        })
-    
-    # ========== GET ANNOUNCEMENTS (FIXED) ==========
-    # Changed from 'posted_by' to 'teacher__user' and limited to 2
-    announcements = Announcement.objects.filter(
-        is_active=True,
-        publish_date__lte=datetime.now()
-    ).select_related('teacher__user').order_by('-publish_date')[:2]
-    
-    # ========== GET UPCOMING EVENTS ==========
-    events = Event.objects.filter(
-        start_date__gte=datetime.now().date(),
-        is_active=True
-    ).order_by('start_date')[:4]
-    
-    # ========== BUILD CONTEXT ==========
-    context = {
-        'parent': parent,
-        'children_data': children_data,
-        'announcements': announcements,
-        'events': events,
-    }
-    
-    # ========== DEBUG OUTPUT (Optional - remove in production) ==========
-    print("=" * 60)
-    print("DEBUG: Parent Dashboard")
-    print(f"Parent: {parent.user.get_full_name()}")
-    print(f"Number of children: {len(children_data)}")
-    print(f"Number of announcements: {announcements.count()}")
-    for data in children_data:
-        print(f"\nChild: {data['child'].get_full_name()}")
-        print(f"  Attendance Rate: {data['attendance_rate']}%")
-        print(f"  Present Days: {data['present_days']}")
-        print(f"  Total Days: {data['total_days']}")
-    print("=" * 60)
-    
-    return render(request, 'users/parent_dashboard.html', context)
-
-# If you need this in multiple places, create a reusable function:
-def get_child_dashboard_data(child):
-    """
-    Get all dashboard data for a child
-    Returns a dictionary with child info, attendance stats, and grades
-    """
-    return {
-        'child': child,
-        'attendance_stats': get_attendance_stats(child),
-        'latest_grades': FinalGrade.objects.filter(
-            student=child
-        ).select_related('class_obj').order_by('-created_at')[:3],
-    }
-
-
-# Then use it like this in your view:
 @login_required
 @parent_required
-def parent_dashboard_clean(request):
-    """Clean parent dashboard using helper function"""
-    parent = request.user.parent_profile
-    
-    # Get dashboard data for all children
-    children_data = [
-        get_child_dashboard_data(child) 
-        for child in parent.children.all()
-    ]
-    
-    context = {
-        'parent': parent,
-        'children_data': children_data,
-    }
-    
-    return render(request, 'users/parent_dashboard.html', context)
-
-
-
-
-@login_required
 def parent_dashboard(request):
-    """Parent dashboard with children info"""
-    # Check if user is a parent
-    if request.user.role != 'parent':
-        messages.error(request, 'Access denied.')
-        return redirect('users:login_selection')
+    """Parent dashboard with children's competency progress"""
+    parent = request.user.parent_profile
+    children = parent.children.filter(is_active=True)
     
-    # Get parent profile
-    try:
-        parent = request.user.parent_profile
-    except Parent.DoesNotExist:
-        messages.error(request, 'Parent profile not found.')
-        return redirect('users:login_selection')
-    
-    # Get all children
-    children = parent.children.all()
-    
-    # Prepare data for each child
+    current_quarter = get_current_quarter()
     children_data = []
     
     for child in children:
-        # ========== GET LATEST GRADES ==========
-        latest_grades = FinalGrade.objects.filter(
-            student=child
-        ).select_related('class_obj').order_by('-quarter', '-created_at')[:3]
+        # Get competency statistics for current quarter
+        total_competencies = Domain.objects.aggregate(
+            total=Count('competencies')
+        )['total']
         
-        # ========== CALCULATE CURRENT AVERAGE ==========
-        current_quarter = get_current_quarter()
-        current_average = FinalGrade.objects.filter(
-            student=child,
-            quarter=current_quarter
-        ).aggregate(Avg('final_grade'))['final_grade__avg']
-        
-        # ========== GET ATTENDANCE STATS (LAST 30 DAYS) ==========
-        thirty_days_ago = datetime.now().date() - timedelta(days=30)
-        
-        # Query attendance records
-        attendance_records = Attendance.objects.filter(
+        assessed_competencies = QuarterlyCompetencyRecord.objects.filter(
             child=child,
-            date__gte=thirty_days_ago
-        )
+            quarter=current_quarter
+        ).exclude(level__isnull=True).count()
         
-        # Count days
-        total_days = attendance_records.count()
-        present_days = attendance_records.filter(
-            Q(status='present') | Q(status='late')
+        consistent_count = QuarterlyCompetencyRecord.objects.filter(
+            child=child,
+            quarter=current_quarter,
+            level='C'
         ).count()
         
-        # Calculate attendance rate (with safety check)
-        if total_days > 0:
-            attendance_rate = round((present_days / total_days * 100), 1)
-        else:
-            attendance_rate = 0  # Default if no attendance records
+        # Calculate competency progress percentage
+        competency_progress = 0
+        if total_competencies > 0:
+            competency_progress = round((consistent_count / total_competencies) * 100, 1)
         
-        # ========== BUILD DICTIONARY ==========
+        # Get attendance stats (last 30 days)
+        thirty_days_ago = date.today() - timedelta(days=30)
+        attendance_stats = get_attendance_stats(child, thirty_days_ago, date.today())
+        
         children_data.append({
             'child': child,
-            'latest_grades': latest_grades,
-            'current_average': round(current_average, 2) if current_average else None,
-            'attendance_rate': attendance_rate,
-            'present_days': present_days,
-            'total_days': total_days,
+            'total_competencies': total_competencies,
+            'assessed_competencies': assessed_competencies,
+            'consistent_count': consistent_count,
+            'competency_progress': competency_progress,
+            'attendance_rate': attendance_stats['attendance_rate'],
+            'present_days': attendance_stats['present_days'],
+            'total_days': attendance_stats['total_days'],
         })
     
-    # ========== GET ANNOUNCEMENTS ==========
-    announcements = Announcement.objects.filter(
-        is_active=True,
-        publish_date__lte=datetime.now()
-    ).select_related('posted_by').order_by('-publish_date')[:5]
-    
-    # ========== GET UPCOMING EVENTS ==========
-    # FIXED: Changed from date__gte to start_date__gte
+    # Get upcoming events
     events = Event.objects.filter(
-        start_date__gte=datetime.now().date(),
-        is_active=True  # Also filter for active events
+        start_date__gte=date.today(),
+        is_active=True,
+        is_cancelled=False
+    ).filter(
+        Q(target_audience='all') | Q(target_audience__icontains='parent')
     ).order_by('start_date')[:4]
     
-    # ========== BUILD CONTEXT ==========
+    # Get recent announcements
+    announcements = Announcement.objects.filter(
+        is_active=True,
+        publish_date__lte=timezone.now()
+    ).filter(
+        Q(target_audience='all') | Q(target_audience='parents')
+    ).select_related('teacher__user').order_by('-publish_date')[:2]
+    
     context = {
         'parent': parent,
         'children_data': children_data,
         'announcements': announcements,
         'events': events,
+        'current_quarter': current_quarter,
     }
-    
-    # ========== DEBUG OUTPUT (Optional - remove in production) ==========
-    print("=" * 60)
-    print("DEBUG: Parent Dashboard")
-    print(f"Parent: {parent.user.get_full_name()}")
-    print(f"Number of children: {len(children_data)}")
-    for data in children_data:
-        print(f"\nChild: {data['child'].get_full_name()}")
-        print(f"  Attendance Rate: {data['attendance_rate']}%")
-        print(f"  Present Days: {data['present_days']}")
-        print(f"  Total Days: {data['total_days']}")
-    print("=" * 60)
     
     return render(request, 'users/parent_dashboard.html', context)
 
-def get_current_quarter():
-    """Helper function to determine current quarter based on date"""
-    month = datetime.now().month
-    
-    # Philippine school year quarters (adjust if needed)
-    if month in [6, 7, 8]:
-        return 1  # 1st Quarter (June-August)
-    elif month in [9, 10, 11]:
-        return 2  # 2nd Quarter (September-November)
-    elif month in [12, 1, 2]:
-        return 3  # 3rd Quarter (December-February)
-    else:  # [3, 4, 5]
-        return 4  # 4th Quarter (March-May)
+
 # ========================================
 # Parent Profile Management
 # ========================================
@@ -515,112 +383,73 @@ def parent_profile_edit(request):
 @login_required
 @parent_required
 def child_detail(request, child_id):
-    """Detailed view of a child's information for parent"""
     parent = request.user.parent_profile
-    
-    # Ensure parent has access to this child
-    try:
-        child = Child.objects.get(id=child_id, parents=parent)
-    except Child.DoesNotExist:
-        messages.error(request, 'Child not found or you do not have access.')
-        return redirect('users:parent_dashboard')
-    
-    # Get all enrolled classes
-    enrolled_classes = Class.objects.filter(enrollments__student=child)
-    
-    # All final grades grouped by quarter
-    grades_by_quarter = {}
-    for quarter in range(1, 5):
-        grades = FinalGrade.objects.filter(
-            student=child,
-            quarter=quarter
-        ).select_related('class_obj')
-        if grades.exists():
-            grades_by_quarter[quarter] = grades
-    
-    # Attendance records (last 30 days)
-    attendance = Attendance.objects.filter(
-        child=child
-    ).order_by('-date')[:30]
-    
-    # Attendance summary
-    from datetime import date, timedelta
+
+    child = get_object_or_404(
+        Child,
+        id=child_id,
+        parents=parent,
+        is_active=True
+    )
+
+    enrollment = Enrollment.objects.filter(
+        student=child,
+        is_active=True
+    ).select_related('class_obj__teacher__user').first()
+
+    class_obj = enrollment.class_obj if enrollment else None
+    current_quarter = get_current_quarter()
+
+    # Competency records grouped by domain
+    domains_data = []
+    for domain in Domain.objects.prefetch_related('competencies'):
+        competencies = []
+        for competency in domain.competencies.all():
+            record = QuarterlyCompetencyRecord.objects.filter(
+                child=child,
+                competency=competency,
+                quarter=current_quarter
+            ).first()
+
+            competencies.append({
+                'competency': competency,
+                'level': record.level if record else None
+            })
+
+        domains_data.append({
+            'domain': domain,
+            'competencies': competencies
+        })
+
+    # Attendance
     thirty_days_ago = date.today() - timedelta(days=30)
-    recent_attendance = Attendance.objects.filter(
+    attendance_records = Attendance.objects.filter(
         child=child,
         date__gte=thirty_days_ago
+    ).order_by('-date')
+
+    attendance_stats = get_attendance_stats(
+        child,
+        thirty_days_ago,
+        date.today()
     )
-    
-    total_days = recent_attendance.count()
-    present_days = recent_attendance.filter(status='present').count()
-    absent_days = recent_attendance.filter(status='absent').count()
-    late_days = recent_attendance.filter(status='late').count()
-    
+
     context = {
         'child': child,
-        'enrolled_classes': enrolled_classes,
-        'grades_by_quarter': grades_by_quarter,
-        'attendance': attendance,
-        'attendance_summary': {
-            'total_days': total_days,
-            'present_days': present_days,
-            'absent_days': absent_days,
-            'late_days': late_days,
-            'attendance_rate': round((present_days / total_days * 100) if total_days > 0 else 0, 1)
-        }
+        'class_obj': class_obj,
+        'current_quarter': current_quarter,
+        'domains_data': domains_data,
+        'attendance_records': attendance_records,
+        'attendance_stats': attendance_stats,
+        'enrolled_classes': [class_obj] if class_obj else [],
     }
-    
+
     return render(request, 'users/child_detail.html', context)
 
 
-# ========================================
-# Teacher - View Classes and Students
-# ========================================
-
-@login_required
-@teacher_required
-def teacher_classes(request):
-    """View all classes taught by teacher"""
-    teacher = request.user.teacher_profile
-    classes = Class.objects.filter(teacher=teacher).prefetch_related('enrollments__student')
-    
-    context = {
-        'teacher': teacher,
-        'classes': classes,
-    }
-    
-    return render(request, 'users/teacher_classes.html', context)
-
-
-@login_required
-@teacher_required
-def class_detail(request, class_id):
-    """View students in a specific class"""
-    teacher = request.user.teacher_profile
-    
-    # Ensure teacher owns this class
-    try:
-        class_obj = Class.objects.get(id=class_id, teacher=teacher)
-    except Class.DoesNotExist:
-        messages.error(request, 'Class not found or you do not have access.')
-        return redirect('users:teacher_classes')
-    
-    # Get enrolled students
-    enrollments = Enrollment.objects.filter(
-        class_obj=class_obj
-    ).select_related('student').order_by('student__last_name', 'student__first_name')
-    
-    context = {
-        'teacher': teacher,
-        'class_obj': class_obj,
-        'enrollments': enrollments,
-    }
-    
-    return render(request, 'users/class_detail.html', context)
-
 
 # ========================================
-# Teacher Profile Management (UPDATED)
+# Teacher Profile Management
 # ========================================
 
 @login_required
@@ -658,93 +487,49 @@ def teacher_profile_edit(request):
 
 
 # ========================================
-# Chatbot Management
+# Teacher - View Classes and Students
 # ========================================
 
 @login_required
-@parent_required
-@csrf_exempt
-def chatbot_view(request):
-    """Handle chatbot API requests"""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST requests allowed'}, status=405)
+@teacher_required
+def teacher_classes(request):
+    """View all classes taught by teacher"""
+    teacher = request.user.teacher_profile
+    classes = Class.objects.filter(
+        teacher=teacher,
+        is_active=True
+    ).prefetch_related('enrollments__student')
+    
+    context = {
+        'teacher': teacher,
+        'classes': classes,
+    }
+    
+    return render(request, 'users/teacher_classes.html', context)
+
+
+@login_required
+@teacher_required
+def class_detail(request, class_id):
+    """View students in a specific class"""
+    teacher = request.user.teacher_profile
     
     try:
-        data = json.loads(request.body)
-        user_message = data.get('message', '').strip()
-        
-        if not user_message:
-            return JsonResponse({'error': 'Message cannot be empty'}, status=400)
-        
-        # Get parent and children info for context
-        parent = request.user.parent_profile
-        children = parent.children.all()
-        
-        # Build context for the AI
-        context = f"You are a helpful school assistant chatbot. The parent has {children.count()} child(ren) enrolled. "
-        if children.exists():
-            child_names = ", ".join([child.get_full_name() for child in children])
-            context += f"Their names are: {child_names}. "
-        
-        context += "Answer questions about school policies, schedules, and provide general assistance. Be friendly and concise."
-        
-        # Prepare the prompt
-        prompt = f"{context}\n\nParent: {user_message}\nAssistant:"
-        
-        # Call Hugging Face API
-        API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
-        headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_API_TOKEN}"}
-        
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_length": 150,
-                "temperature": 0.7,
-                "top_p": 0.9,
-            }
-        }
-        
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=10)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                bot_response = result[0].get('generated_text', '').strip()
-                # Remove the prompt from response
-                bot_response = bot_response.replace(prompt, '').strip()
-                
-                if not bot_response:
-                    bot_response = "I'm here to help! Can you please rephrase your question?"
-                
-                return JsonResponse({
-                    'success': True,
-                    'response': bot_response
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'response': "I'm currently processing. Please try again!"
-                })
-        else:
-            return JsonResponse({
-                'success': False,
-                'response': "I'm having trouble connecting. Please try again in a moment."
-            })
-            
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except requests.Timeout:
-        return JsonResponse({
-            'success': False,
-            'response': "Request timed out. Please try again."
-        })
-    except Exception as e:
-        print(f"Chatbot error: {str(e)}")
-        return JsonResponse({
-            'success': False,
-            'response': "Something went wrong. Please try again later."
-        })
+        class_obj = Class.objects.get(id=class_id, teacher=teacher, is_active=True)
+    except Class.DoesNotExist:
+        messages.error(request, 'Class not found or you do not have access.')
+        return redirect('users:teacher_classes')
     
-
-def landing_page(request):
-    return render(request, 'users/landing_page.html')
+    # Get enrolled students
+    enrollments = Enrollment.objects.filter(
+        class_obj=class_obj,
+        is_active=True
+    ).select_related('student').order_by('student__last_name', 'student__first_name')
+    
+    context = {
+        'teacher': teacher,
+        'class_obj': class_obj,
+        'enrollments': enrollments,
+    }
+    
+    return render(request, 'users/class_detail.html', context)

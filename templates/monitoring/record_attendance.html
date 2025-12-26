@@ -6,53 +6,43 @@
 <div class="row justify-content-center">
     <div class="col-lg-11">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="mb-0">
-                <i class="bi bi-clipboard-check text-primary"></i> Record Attendance
-            </h2>
+            <h2><i class="bi bi-clipboard-check text-primary"></i> Record Attendance</h2>
             <a href="{% url 'monitoring:attendance_list' %}" class="btn btn-outline-primary">
                 <i class="bi bi-list-ul"></i> View Attendance List
             </a>
         </div>
-        
-        <!-- Messages -->
+
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
         {% endif %}
-        
+
         <!-- Date and Class Selection -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <form method="get" id="filterForm">
+                <form method="get">
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label">Date</label>
-                            <input type="date" 
-                                   name="date" 
-                                   class="form-control" 
-                                   value="{{ selected_date|date:'Y-m-d' }}"
-                                   required>
+                            <input type="date" name="date" class="form-control" value="{{ selected_date|date:'Y-m-d' }}" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Select Class</label>
                             <select name="class_id" class="form-select" required>
                                 <option value="">-- Choose Class --</option>
                                 {% for class in classes %}
-                                    <option value="{{ class.id }}" 
-                                            {% if selected_class and class.id == selected_class.id %}selected{% endif %}>
+                                    <option value="{{ class.id }}" {% if selected_class and class.id == selected_class.id %}selected{% endif %}>
                                         {{ class.subject }} - {{ class.grade_level }} {{ class.section }}
                                     </option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-search"></i> Load
-                            </button>
+                            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Load</button>
                         </div>
                     </div>
                 </form>
@@ -60,43 +50,22 @@
         </div>
 
         {% if selected_class %}
-            <!-- Class Info -->
             <div class="alert alert-info mb-4">
                 <strong>Class:</strong> {{ selected_class.subject }} - {{ selected_class.grade_level }} {{ selected_class.section }}<br>
                 <strong>Date:</strong> {{ selected_date|date:'F d, Y' }}<br>
-                <strong>Total Students:</strong> {{ students|length }}
-            </div>
-
-            <!-- Quick Mark Buttons -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-body text-center">
-                    <p class="text-muted mb-3">Quick Mark All:</p>
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-success" onclick="markAll('present')">
-                            <i class="bi bi-check-all"></i> All Present
-                        </button>
-                        <button type="button" class="btn btn-danger" onclick="markAll('absent')">
-                            <i class="bi bi-x-lg"></i> All Absent
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="clearAll()">
-                            <i class="bi bi-arrow-counterclockwise"></i> Clear All
-                        </button>
-                    </div>
-                </div>
+                <strong>Total Students:</strong> {{ children|length }}
             </div>
 
             <!-- Attendance Form -->
-            <form method="post" id="attendanceForm">
+            <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
                 <input type="hidden" name="class_id" value="{{ selected_class.id }}">
-                
+
                 <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">Students</h5>
-                    </div>
+                    <div class="card-header bg-white"><h5>Students</h5></div>
                     <div class="card-body">
-                        {% if students %}
+                        {% if children %}
                             <div class="table-responsive">
                                 <table class="table table-hover">
                                     <thead>
@@ -109,147 +78,39 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {% for student in students %}
+                                        {% for child in children %}
                                             <tr>
                                                 <td>
-                                                    <strong>{{ student.get_full_name }}</strong>
-                                                    <br>
-                                                    <small class="text-muted">LRN: {{ student.lrn }}</small>
-                                                </td>
-                                                <td style="min-width: 280px;">
-                                                    <div class="btn-group w-100" role="group">
-                                                        <input type="radio" 
-                                                               class="btn-check" 
-                                                               name="status_{{ student.id }}" 
-                                                               id="present_{{ student.id }}" 
-                                                               value="present"
-                                                               {% if student.attendance_status == 'present' %}checked{% endif %}>
-                                                        <label class="btn btn-outline-success btn-sm" for="present_{{ student.id }}">
-                                                            <i class="bi bi-check"></i> Present
-                                                        </label>
-
-                                                        <input type="radio" 
-                                                               class="btn-check" 
-                                                               name="status_{{ student.id }}" 
-                                                               id="absent_{{ student.id }}" 
-                                                               value="absent"
-                                                               {% if student.attendance_status == 'absent' %}checked{% endif %}>
-                                                        <label class="btn btn-outline-danger btn-sm" for="absent_{{ student.id }}">
-                                                            <i class="bi bi-x"></i> Absent
-                                                        </label>
-
-                                                        <input type="radio" 
-                                                               class="btn-check" 
-                                                               name="status_{{ student.id }}" 
-                                                               id="late_{{ student.id }}" 
-                                                               value="late"
-                                                               {% if student.attendance_status == 'late' %}checked{% endif %}>
-                                                        <label class="btn btn-outline-warning btn-sm" for="late_{{ student.id }}">
-                                                            <i class="bi bi-clock"></i> Late
-                                                        </label>
-                                                    </div>
+                                                    <strong>{{ child.child.get_full_name }}</strong><br>
+                                                    <small class="text-muted">LRN: {{ child.child.lrn }}</small>
                                                 </td>
                                                 <td>
-                                                    <input type="time" 
-                                                           class="form-control form-control-sm" 
-                                                           name="time_in_{{ student.id }}"
-                                                           value="{% if student.time_in %}{{ student.time_in|time:'H:i' }}{% endif %}">
+                                                    <select name="status_{{ child.child.id }}" class="form-select form-select-sm">
+                                                        {% for val, label in status_choices %}
+                                                            <option value="{{ val }}" {% if child.status == val %}selected{% endif %}>{{ label }}</option>
+                                                        {% endfor %}
+                                                    </select>
                                                 </td>
-                                                <td>
-                                                    <input type="time" 
-                                                           class="form-control form-control-sm" 
-                                                           name="time_out_{{ student.id }}"
-                                                           value="{% if student.time_out %}{{ student.time_out|time:'H:i' }}{% endif %}">
-                                                </td>
-                                                <td>
-                                                    <input type="text" 
-                                                           class="form-control form-control-sm" 
-                                                           name="remarks_{{ student.id }}"
-                                                           placeholder="Optional notes"
-                                                           value="{{ student.remarks|default:'' }}">
-                                                </td>
+                                                <td><input type="time" class="form-control form-control-sm" name="time_in_{{ child.child.id }}" value="{{ child.time_in|default:'' }}"></td>
+                                                <td><input type="time" class="form-control form-control-sm" name="time_out_{{ child.child.id }}" value="{{ child.time_out|default:'' }}"></td>
+                                                <td><input type="text" class="form-control form-control-sm" name="remarks_{{ child.child.id }}" value="{{ child.remarks }}"></td>
                                             </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
                         {% else %}
-                            <p class="text-muted text-center my-4">No students enrolled in this class.</p>
+                            <p class="text-muted text-center">No students enrolled in this class.</p>
                         {% endif %}
                     </div>
-                    {% if students %}
-                        <div class="card-footer bg-white text-end">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Save Attendance
-                            </button>
+                    {% if children %}
+                        <div class="card-footer text-end">
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Attendance</button>
                         </div>
                     {% endif %}
                 </div>
             </form>
-        {% else %}
-            <div class="alert alert-info text-center">
-                <i class="bi bi-info-circle"></i> Please select a date and class to record attendance.
-            </div>
         {% endif %}
     </div>
 </div>
-
-<script>
-function markAll(status) {
-    // Get all radio buttons with the specified status value
-    document.querySelectorAll(`input[type="radio"][value="${status}"]`).forEach(radio => {
-        radio.checked = true;
-    });
-}
-
-function clearAll() {
-    // Uncheck all radio buttons
-    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.checked = false;
-    });
-    // Clear time inputs
-    document.querySelectorAll('input[type="time"]').forEach(input => {
-        input.value = '';
-    });
-    // Clear remarks
-    document.querySelectorAll('input[type="text"][name^="remarks_"]').forEach(input => {
-        input.value = '';
-    });
-}
-
-// Optional: Show confirmation before leaving with unsaved changes
-let formChanged = false;
-document.getElementById('attendanceForm')?.addEventListener('change', function() {
-    formChanged = true;
-});
-
-document.getElementById('attendanceForm')?.addEventListener('submit', function() {
-    formChanged = false;
-});
-
-window.addEventListener('beforeunload', function(e) {
-    if (formChanged) {
-        e.preventDefault();
-        e.returnValue = '';
-    }
-});
-</script>
-
-<style>
-/* Make table more compact and scrollable on small screens */
-.table td, .table th {
-    vertical-align: middle;
-}
-
-.btn-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-}
-
-@media (max-width: 768px) {
-    .table-responsive {
-        font-size: 0.875rem;
-    }
-}
-</style>
 {% endblock %}
