@@ -1,0 +1,14 @@
+
+/* Dropdown item hover effect */
+.dropdown-menu .dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.dropdown-menu .dropdown-item.bg-light {
+    border-left: 3px solid #0d6efd;
+}
+
+#unreadBadge {
+    font-size: 0.65rem;
+    padding: 0.25em 0.5em;
+}

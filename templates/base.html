@@ -35,5 +35,21 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     {% block extra_js %}{% endblock %}
+
+    <!-- Add this to your base.html template, before the closing </body> tag -->
+
+<!-- KinderCare Chat Messenger -->
+<div id="kindercare-chat" 
+     data-user-role="{% if user.is_authenticated %}{{ user.role }}{% endif %}"
+     data-user-name="{% if user.is_authenticated %}{{ user.get_full_name }}{% endif %}">
+</div>
+
+<!-- 
+USAGE INSTRUCTIONS:
+1. The chat will automatically detect user role from data-user-role attribute
+2. For parents: Shows chatbot (KinderCare Assistant) + teacher conversations
+3. For teachers: Shows only parent conversations
+4. Make sure chatbot.css and chatbot.js are loaded in your template
+-->
 </body>
 </html>

@@ -67,43 +67,7 @@ urlpatterns = [
         name='parent_event_detail'
     ),
     
-    # ========================================
-    # CHATBOT (FAQ System)
-    # ========================================
-    path('chatbot/', 
-         views.chatbot, 
-         name='chatbot'),
     
-    path('chatbot/query/', 
-         views.chatbot_query, 
-         name='chatbot_query'),
-    
-    # ========================================
-    # CHAT CONVERSATIONS (Parent-Teacher)
-    # ========================================
-    path('chat/start/', 
-         views.start_conversation, 
-         name='start_conversation'),
-    
-    path('chat/history/', 
-         views.chat_history, 
-         name='chat_history'),
-    
-    path('conversation/<int:conversation_id>/', 
-         views.conversation_detail, 
-         name='conversation_detail'),
-    
-    path('conversation/<int:conversation_id>/send/', 
-         views.send_conversation_message, 
-         name='send_conversation_message'),
-    
-    path('conversation/<int:conversation_id>/close/', 
-         views.close_conversation, 
-         name='close_conversation'),
-
-     path('api/children/', api_views.parent_children_list_api, name='api_children_list'),
-    path('api/chat/create/', api_views.create_conversation_api, name='api_create_conversation'),
-    path('api/chat/recent-conversations/', api_views.recent_conversations_api, name='api_recent_conversations'),
     
     # ========================================
     # NOTIFICATIONS
@@ -124,5 +88,48 @@ urlpatterns = [
     path('api/notifications/count/', 
          views.get_unread_notifications_count, 
          name='get_unread_notifications_count'),
+
+     path('api/chat/conversations/', 
+         api_views.get_parent_conversations, 
+         name='api_parent_conversations'),
+    
+    path('api/chat/teacher-conversations/', 
+         api_views.get_teacher_conversations, 
+         name='api_teacher_conversations'),
+    
+    # Get messages in a conversation
+    path('api/chat/conversation/<int:conversation_id>/messages/', 
+         api_views.get_conversation_messages, 
+         name='api_conversation_messages'),
+    
+    # Send message
+    path('api/chat/conversation/<int:conversation_id>/send/', 
+         api_views.send_message, 
+         name='api_send_message'),
+    
+    # Get available teachers
+    path('api/chat/available-teachers/', 
+         api_views.get_available_teachers, 
+         name='api_available_teachers'),
+    
+    # Create new conversation
+    path('api/chat/create-conversation/', 
+         api_views.create_conversation, 
+         name='api_create_conversation'),
+    
+    # Get unread count
+    path('api/chat/unread-count/', 
+         api_views.get_unread_count, 
+         name='api_unread_count'),
+    
+    # Search bot response
+    path('api/chat/bot-search/', 
+         api_views.search_bot_response, 
+         name='api_bot_search'),
+    
+    # Mark conversation as resolved
+    path('api/chat/conversation/<int:conversation_id>/resolve/', 
+         api_views.mark_conversation_resolved, 
+         name='api_resolve_conversation'),
 
 ]
