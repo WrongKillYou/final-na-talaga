@@ -93,7 +93,7 @@ class TeacherProfileUpdateForm(forms.ModelForm):
     """Form for teachers to update their profile"""
     class Meta:
         model = Teacher
-        fields = ['contact_number', 'address', 'photo']
+        fields = ['contact_number', 'address', 'photo']  # only actual fields
         widgets = {
             'contact_number': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -104,16 +104,11 @@ class TeacherProfileUpdateForm(forms.ModelForm):
                 'rows': 3,
                 'placeholder': 'Enter your address'
             }),
-            'emergency_contact': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Emergency contact name'
-            }),
-            'emergency_phone': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Emergency contact phone'
-            }),
-            'profile_picture': forms.FileInput(attrs={'class': 'form-control'})
+            'photo': forms.FileInput(attrs={'class': 'form-control'})
         }
+
+        
+
 
 
 class ParentPasswordChangeForm(PasswordChangeForm):

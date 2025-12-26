@@ -69,24 +69,18 @@
 <div class="alert alert-info mb-4">
     <h6 class="alert-heading"><i class="bi bi-info-circle"></i> Assessment Levels</h6>
     <div class="row">
-        <div class="col-md-4">
-            <strong>B - Beginning:</strong> Child is starting to learn the skill
-        </div>
-        <div class="col-md-4">
-            <strong>D - Developing:</strong> Child is making progress in the skill
-        </div>
-        <div class="col-md-4">
-            <strong>C - Consistent:</strong> Child demonstrates the skill consistently
-        </div>
+        <div class="col-md-4"><strong>B - Beginning:</strong> Child is starting to learn the skill</div>
+        <div class="col-md-4"><strong>D - Developing:</strong> Child is making progress in the skill</div>
+        <div class="col-md-4"><strong>C - Consistent:</strong> Child demonstrates the skill consistently</div>
     </div>
 </div>
 
-<!-- Student List with Domain Navigation -->
+<!-- Student Cards -->
 <div class="card shadow-sm">
     <div class="card-header bg-white">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="bi bi-people-fill text-primary"></i> Students</h5>
-            <small class="text-muted">Click on a student to input their competency records</small>
+            <small class="text-muted">Click a student to view/edit their competency records</small>
         </div>
     </div>
     <div class="card-body">
@@ -95,111 +89,34 @@
                 {% with student=enrollment.student %}
                 <div class="col-md-6 mb-3">
                     <div class="card h-100 border">
-                        <div class="card-body">
+                        <div class="card-body d-flex flex-column justify-content-between">
                             <div class="d-flex align-items-center mb-2">
                                 {% if student.photo %}
                                     <img src="{{ student.photo.url }}" 
-                                         class="rounded-circle me-2" 
-                                         width="40" height="40" 
-                                         alt="{{ child.get_full_name }}">
+                                         class="rounded-circle me-2" width="40" height="40" 
+                                         alt="{{ student.get_full_name }}">
                                 {% else %}
                                     <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" 
                                          style="width: 40px; height: 40px;">
                                         {{ student.first_name.0 }}{{ student.last_name.0 }}
                                     </div>
                                 {% endif %}
-                                
                                 <div>
-                                    <h6 class="mb-0">{{ child.get_full_name }}</h6>
+                                    <h6 class="mb-0">{{ student.get_full_name }}</h6>
                                     <small class="text-muted">LRN: {{ student.lrn }}</small>
                                 </div>
                             </div>
-                            
                             <a href="{% url 'monitoring:student_competency_detail' student.id %}?quarter={{ selected_quarter }}" 
-                               class="btn btn-sm btn-outline-primary w-100">
-                                <i class="bi bi-pencil"></i> Input Records
+                               class="btn btn-sm btn-outline-primary w-100 mt-auto">
+                                <i class="bi bi-pencil"></i> View Records
                             </a>
                         </div>
                     </div>
                 </div>
                 {% endwith %}
             {% empty %}
-                <div class="col-12">
-                    <p class="text-muted text-center py-4">No students enrolled in this class.</p>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
-<!-- Alternative: Domain-based Input (for all students at once) -->
-<div class="card shadow-sm mt-4">
-    <div class="card-header bg-white">
-        <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> Input by Domain</h5>
-    </div>
-    <div class="card-body">
-        <p class="text-muted">Input competency records for all students, organized by domain:</p>
-        <div class="d-grid gap-2">
-            {% for domain in domains %}
-                <button type="button" 
-                        class="btn btn-outline-secondary text-start" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#domainModal{{ domain.id }}">
-                    <i class="bi bi-folder"></i> {{ domain.name }}
-                    <small class="float-end text-muted">{{ domain.competencies.count }} competencies</small>
-                </button>
-                
-                <!-- Domain Modal -->
-                <div class="modal fade" id="domainModal{{ domain.id }}" tabindex="-1">
-                    <div class="modal-dialog modal-xl">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">{{ domain.name }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <p class="text-muted">{{ domain.description }}</p>
-                                
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th style="width: 40%;">Competency</th>
-                                                {% for enrollment in enrollments %}
-                                                    <th class="text-center" style="width: {% widthratio 60 enrollments|length 1 %}%;">
-                                                        {{ enrollment.student.first_name|truncatewords:1 }}
-                                                    </th>
-                                                {% endfor %}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for competency in domain.competencies.all %}
-                                                <tr>
-                                                    <td>
-                                                        <small><strong>{{ competency.code }}</strong></small><br>
-                                                        <small class="text-muted">{{ competency.description|truncatewords:10 }}</small>
-                                                    </td>
-                                                    {% for enrollment in enrollments %}
-                                                        <td class="text-center">
-                                                            <small class="text-muted">B/D/C</small>
-                                                        </td>
-                                                    {% endfor %}
-                                                </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
-                                <div class="alert alert-warning">
-                                    <i class="bi bi-info-circle"></i> 
-                                    <strong>Note:</strong> For easier data entry, we recommend using the Excel template (Download Template → Fill → Upload).
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="col-12 text-center py-4 text-muted">
+                    No students enrolled in this class.
                 </div>
             {% endfor %}
         </div>
@@ -215,36 +132,25 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form method="post" 
-                      enctype="multipart/form-data" 
+                <form method="post" enctype="multipart/form-data" 
                       action="{% url 'monitoring:bulk_upload_competencies' class_obj.id %}">
                     {% csrf_token %}
-                    
                     <div class="alert alert-info">
-                        <h6 class="alert-heading">How to use:</h6>
                         <ol class="mb-0 small">
                             <li>Download the Excel template</li>
                             <li>Fill in the competency levels (B, D, or C) for each student</li>
                             <li>Upload the completed file here</li>
                         </ol>
                     </div>
-                    
                     <div class="mb-3">
                         <label class="form-label">Upload Excel File</label>
-                        <input type="file" 
-                               name="competency_file" 
-                               class="form-control" 
-                               accept=".xlsx,.xls" 
-                               required>
-                        <small class="text-muted">
-                            Only Excel files (.xlsx, .xls) are accepted
-                        </small>
+                        <input type="file" name="competency_file" class="form-control" accept=".xlsx,.xls" required>
+                        <small class="text-muted">Only Excel files (.xlsx, .xls) are accepted</small>
                     </div>
-                    
                     <div class="d-grid gap-2">
                         <a href="{% url 'monitoring:download_competency_template' class_obj.id %}?quarter={{ selected_quarter }}" 
                            class="btn btn-outline-success">
-                            <i class="bi bi-download"></i> Download Template First
+                            <i class="bi bi-download"></i> Download Template
                         </a>
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-upload"></i> Upload Records
@@ -261,7 +167,7 @@
 {% block extra_css %}
 <style>
 .card:hover {
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
     transition: box-shadow 0.3s ease-in-out;
 }
 </style>

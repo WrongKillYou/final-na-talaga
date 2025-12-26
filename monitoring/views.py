@@ -99,14 +99,18 @@ def class_list(request):
         teacher=teacher,
         is_active=True
     ).annotate(
-        student_count=Count('enrollments')
+        student_count=Count('enrollments', distinct=True)  # Count unique enrolled students
     ).order_by('-school_year', 'class_name')
+
+    room = Class.room_number
     
     context = {
         'teacher': teacher,
         'classes': classes,
+        'room': room,
     }
     return render(request, 'monitoring/class_list.html', context)
+
 
 
 @login_required
@@ -211,123 +215,128 @@ def competency_input(request, class_id):
     
     return render(request, 'monitoring/competency_input.html', context)
 
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import Class, Enrollment, Domain, Competency, QuarterlyCompetencyRecord
+from users.decorators import teacher_required
+
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import Class, Enrollment, Domain, Competency, QuarterlyCompetencyRecord
+from users.decorators import teacher_required
+
 
 @login_required
 @teacher_required
 def download_competency_template(request, class_id):
     """
     Download Excel template for competency record entry
-    Pre-filled with student names and competency list
+    Students as rows, competencies as columns (teachers fill B/D/C)
+    Class Name and Quarter are isolated in cells B1 and B2 for easy reading
     """
     teacher = request.user.teacher_profile
     class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
-    
-    quarter = int(request.GET.get('quarter', get_current_quarter()))
-    
+
+    quarter = int(request.GET.get('quarter', 1))
+
     # Get enrolled students
     enrollments = Enrollment.objects.filter(
         class_obj=class_obj,
         is_active=True
-    ).select_related('student').order_by(
-        'student__last_name',
-        'student__first_name'
-    )
-    
+    ).select_related('student').order_by('student__last_name', 'student__first_name')
+
     # Get all competencies organized by domain
     domains = Domain.objects.prefetch_related('competencies').all()
-    
-    # Create Excel workbook
+    all_competencies = [(domain.name, comp.code, comp.description)
+                        for domain in domains for comp in domain.competencies.all()]
+
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Q{quarter} Records"
-    
-    # Styling
+    ws.title = "Competency Records"
+
+    # --- Step 1: Put Class Name and Quarter in separate cells ---
+    ws['A1'] = "CLASS NAME"
+    ws['B1'] = class_obj.class_name
+    ws['A2'] = "QUARTER"
+    ws['B2'] = quarter
+
+    # Styling for header info
+    for cell in ['A1', 'B1', 'A2', 'B2']:
+        ws[cell].font = Font(bold=True)
+        ws[cell].alignment = Alignment(horizontal='center')
+        ws[cell].fill = PatternFill(start_color="FFD966", end_color="FFD966", fill_type="solid")
+        ws[cell].border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+    # --- Step 2: Add instructions in merged row 3 ---
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=2 + len(all_competencies))
+    ws['A3'] = "Instructions: Fill in B (Beginning), D (Developing), or C (Consistent). Leave blank if not assessed."
+    ws['A3'].font = Font(italic=True, size=10, color="000000")
+    ws['A3'].alignment = Alignment(horizontal='center')
+    ws['A3'].fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+
+    # --- Step 3: Header row (row 4) ---
+    ws.append(['Student LRN', 'Student Name'] + [f"{code}\n({domain})" for domain, code, desc in all_competencies])
+    header_row = ws[4]
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=12)
-    border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    
-    # Title row
-    ws.merge_cells('A1:F1')
-    ws['A1'] = f"COMPETENCY RECORD TEMPLATE - {class_obj.class_name} - Quarter {quarter}"
-    ws['A1'].font = Font(bold=True, size=14)
-    ws['A1'].alignment = Alignment(horizontal='center')
-    
-    # Instructions row
-    ws.merge_cells('A2:F2')
-    ws['A2'] = "Enter B (Beginning), D (Developing), or C (Consistent) for each competency. Leave blank if not assessed."
-    ws['A2'].font = Font(italic=True, size=10)
-    ws['A2'].alignment = Alignment(horizontal='center')
-    
-    # Header row
-    ws.append([])  # Empty row
-    headers = ['Student LRN', 'Student Name', 'Domain', 'Competency Code', 'Competency Description', 'Level (B/D/C)']
-    ws.append(headers)
-    
-    header_row = ws[4]
+    border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                    top=Side(style='thin'), bottom=Side(style='thin'))
     for cell in header_row:
         cell.fill = header_fill
         cell.font = header_font
         cell.border = border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    
-    # Set column widths
+
+    # --- Step 4: Set column widths ---
     ws.column_dimensions['A'].width = 15
     ws.column_dimensions['B'].width = 25
-    ws.column_dimensions['C'].width = 30
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 60
-    ws.column_dimensions['F'].width = 12
-    
-    # Fill data rows
+    for i in range(3, 3 + len(all_competencies)):
+        ws.column_dimensions[get_column_letter(i)].width = 15
+
+    # --- Step 5: Fill student rows starting from row 5 ---
     row_num = 5
     for enrollment in enrollments:
-        child = enrollment.student
-        
-        for domain in domains:
-            for competency in domain.competencies.all():
-                # Get existing record if any
-                try:
-                    record = QuarterlyCompetencyRecord.objects.get(
-                        child=child,
-                        competency=competency,
-                        quarter=quarter
-                    )
-                    level = record.level or ''
-                except QuarterlyCompetencyRecord.DoesNotExist:
-                    level = ''
-                
-                ws.append([
-                    child.get_full_name,
-                    child.get_full_name(),
-                    domain.name,
-                    competency.code,
-                    competency.description,
-                    level
-                ])
-                
-                # Apply border to all cells
-                for cell in ws[row_num]:
-                    cell.border = border
-                    if cell.column == 6:  # Level column
-                        cell.alignment = Alignment(horizontal='center')
-                
-                row_num += 1
-    
-    # Freeze panes
-    ws.freeze_panes = 'A5'
-    
-    # Create response
+        student = enrollment.student
+        existing_levels = {}
+        for domain, code, desc in all_competencies:
+            try:
+                record = QuarterlyCompetencyRecord.objects.get(
+                    child=student,
+                    competency__code=code,
+                    quarter=quarter
+                )
+                existing_levels[code] = record.level or ''
+            except QuarterlyCompetencyRecord.DoesNotExist:
+                existing_levels[code] = ''
+
+        row_values = [student.lrn, student.get_full_name()] + [existing_levels.get(code, '') for domain, code, desc in all_competencies]
+        ws.append(row_values)
+
+        # Apply border/alignment for student rows
+        for cell in ws[row_num]:
+            cell.border = border
+            if cell.column > 2:
+                cell.alignment = Alignment(horizontal='center')
+        row_num += 1
+
+    ws.freeze_panes = ws['C5']  # Freeze student info columns
+
+    # --- Step 6: Return workbook as response ---
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    response['Content-Disposition'] = (
-        f'attachment; filename="Competency_Template_{class_obj.class_name}_Q{quarter}.xlsx"'
-    )
+    response['Content-Disposition'] = f'attachment; filename="Competency_Template_{class_obj.class_name}_Q{quarter}.xlsx"'
     wb.save(response)
     return response
 
@@ -335,134 +344,128 @@ def download_competency_template(request, class_id):
 @login_required
 @teacher_required
 def bulk_upload_competencies(request, class_id):
-    """
-    Upload filled Excel template to bulk update competency records
-    """
     teacher = request.user.teacher_profile
     class_obj = get_object_or_404(Class, id=class_id, teacher=teacher)
-    
+
     if request.method != 'POST':
         messages.error(request, 'Invalid request method.')
         return redirect('monitoring:competency_input', class_id=class_id)
-    
+
     excel_file = request.FILES.get('competency_file')
     if not excel_file:
         messages.error(request, 'No file uploaded.')
         return redirect('monitoring:competency_input', class_id=class_id)
-    
+
     try:
         wb = load_workbook(excel_file)
         ws = wb.active
-        
+
+        # --- Step 1: Read class and quarter from cells ---
+        template_class_name = ws['B1'].value
+        template_quarter = ws['B2'].value
+
+        if not template_class_name or not template_quarter:
+            messages.error(request, 'Class name or quarter is missing in template (cells B1 and B2).')
+            return redirect('monitoring:competency_input', class_id=class_id)
+
+        template_quarter = int(template_quarter)
+
+        if template_class_name != class_obj.class_name:
+            messages.error(request, f'Template class "{template_class_name}" does not match current class "{class_obj.class_name}".')
+            return redirect('monitoring:competency_input', class_id=class_id)
+
+        # --- Step 2: Collect competencies from header (row 4) ---
+        header_row = list(ws.iter_rows(min_row=4, max_row=4, values_only=True))[0]
+        competency_columns = {}
+        for idx, cell in enumerate(header_row[2:], start=3):
+            if not cell:
+                continue
+            code = str(cell).split('\n')[0].split(' ')[0].strip()
+            competency = Competency.objects.get(code=code)
+            competency_columns[idx] = competency
+
+        # --- Step 3: Process student rows starting from row 5 ---
         success_count = 0
         error_count = 0
         errors = []
-        
-        # Process rows (skip header rows - start from row 5)
+
         for row_num, row in enumerate(ws.iter_rows(min_row=5, values_only=True), start=5):
+            lrn = row[0]
+            if not lrn:
+                continue
             try:
-                lrn, student_name, domain_name, comp_code, comp_desc, level = row[:6]
-                
-                # Skip if LRN is empty
-                if not lrn:
-                    continue
-                
-                # Validate level
-                if level and level.upper() not in ['B', 'D', 'C']:
-                    errors.append(f"Row {row_num}: Invalid level '{level}' (must be B, D, or C)")
-                    error_count += 1
-                    continue
-                
-                # Get student
-                try:
-                    student = Child.objects.get(lrn=lrn)
-                except Child.DoesNotExist:
-                    errors.append(f"Row {row_num}: Student with LRN {lrn} not found")
-                    error_count += 1
-                    continue
-                
-                # Verify enrollment
-                if not Enrollment.objects.filter(
-                    student=student, 
-                    class_obj=class_obj,
-                    is_active=True
-                ).exists():
-                    errors.append(f"Row {row_num}: {student.get_full_name()} not enrolled in this class")
-                    error_count += 1
-                    continue
-                
-                # Get competency
-                try:
-                    competency = Competency.objects.get(code=comp_code)
-                except Competency.DoesNotExist:
-                    errors.append(f"Row {row_num}: Competency {comp_code} not found")
-                    error_count += 1
-                    continue
-                
-                # Extract quarter from filename or use current
-                quarter = get_current_quarter()
-                
-                # Create or update record
-                if level:
-                    record, created = QuarterlyCompetencyRecord.objects.update_or_create(
-                        child=student,
-                        competency=competency,
-                        quarter=quarter,
-                        defaults={
-                            'level': level.upper(),
-                            'recorded_by': teacher
-                        }
-                    )
-                    success_count += 1
-                
-            except Exception as e:
-                errors.append(f"Row {row_num}: {str(e)}")
+                student = Child.objects.get(lrn=lrn)
+            except Child.DoesNotExist:
+                errors.append(f"Row {row_num}: Student with LRN '{lrn}' not found")
                 error_count += 1
                 continue
-        
-        # Show results
-        if success_count > 0:
-            messages.success(request, f'✅ Successfully uploaded {success_count} competency record(s).')
-        
-        if error_count > 0:
-            error_message = f'⚠️ {error_count} error(s) encountered. '
+
+            if not Enrollment.objects.filter(student=student, class_obj=class_obj, is_active=True).exists():
+                errors.append(f"Row {row_num}: {student.get_full_name()} not enrolled in this class")
+                error_count += 1
+                continue
+
+            for col_idx, competency in competency_columns.items():
+                level = row[col_idx - 1]
+                if level:
+                    level = str(level).strip().upper()
+                    if level not in ['B', 'D', 'C']:
+                        errors.append(f"Row {row_num}, Column {col_idx}: Invalid level '{level}'")
+                        error_count += 1
+                        continue
+
+                    QuarterlyCompetencyRecord.objects.update_or_create(
+                        child=student,
+                        competency=competency,
+                        quarter=template_quarter,
+                        defaults={'level': level, 'recorded_by': teacher}
+                    )
+                    success_count += 1
+
+        # --- Step 4: Show messages ---
+        if success_count:
+            messages.success(request, f"✅ Successfully uploaded {success_count} competency record(s).")
+        if error_count:
+            msg = f"⚠️ {error_count} error(s) found."
             if errors:
-                error_message += 'First 5 errors: ' + '; '.join(errors[:5])
-            messages.warning(request, error_message)
-        
-        if success_count == 0 and error_count == 0:
-            messages.info(request, 'No records were processed.')
-        
+                msg += " First 5 errors: " + "; ".join(errors[:5])
+            messages.warning(request, msg)
+        if not success_count and not error_count:
+            messages.info(request, "No records were processed.")
+
     except Exception as e:
-        messages.error(request, f'❌ Error processing file: {str(e)}')
-    
+        messages.error(request, f"❌ Error processing file: {str(e)}")
+
     return redirect('monitoring:competency_input', class_id=class_id)
+
 
 
 @login_required
 @teacher_required
 def student_competency_detail(request, student_id):
-    """View detailed competency records for a specific student"""
+    """
+    View detailed competency records for a specific student.
+    Shows all quarters, domains, competencies, levels, notes, and final marking.
+    """
     teacher = request.user.teacher_profile
     student = get_object_or_404(Child, id=student_id)
-    
-    # Verify teacher has access to this student
-    if not Enrollment.objects.filter(
-        student=student,
-        class_obj__teacher=teacher,
-        is_active=True
-    ).exists():
+
+    # Get active enrollment for this teacher
+    active_enrollment = student.enrollments.filter(is_active=True, class_obj__teacher=teacher).first()
+
+    if not active_enrollment:
         messages.error(request, 'You do not have access to this student.')
         return redirect('monitoring:class_list')
-    
-    # Get all competency records grouped by quarter and domain
+
+    # Prepare competency data per quarter
     quarters_data = []
+
     for quarter in [1, 2, 3, 4]:
         domains_data = []
-        
+
         for domain in Domain.objects.prefetch_related('competencies').all():
             competencies_data = []
-            
+
             for competency in domain.competencies.all():
                 try:
                     record = QuarterlyCompetencyRecord.objects.get(
@@ -475,30 +478,44 @@ def student_competency_detail(request, student_id):
                 except QuarterlyCompetencyRecord.DoesNotExist:
                     level = None
                     notes = ''
-                
+
                 competencies_data.append({
                     'competency': competency,
                     'level': level,
                     'notes': notes,
                 })
-            
+
             domains_data.append({
                 'domain': domain,
                 'competencies': competencies_data,
             })
-        
+
+        # Determine final marking (most frequent non-empty level)
+        all_levels = [
+            c['level'] for d in domains_data for c in d['competencies'] if c['level']
+        ]
+        if all_levels:
+            final_marking = max(set(all_levels), key=all_levels.count)
+        else:
+            final_marking = None
+
         quarters_data.append({
             'quarter': quarter,
             'domains': domains_data,
+            'final_marking': final_marking,
         })
-    
+
     context = {
         'teacher': teacher,
         'student': student,
+        'active_enrollment': active_enrollment,
         'quarters_data': quarters_data,
     }
-    
+
     return render(request, 'monitoring/student_competency_detail.html', context)
+
+
+
 
 
 # ========================================
