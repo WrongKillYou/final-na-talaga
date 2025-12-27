@@ -104,14 +104,25 @@ def get_conversation_messages(request, conversation_id):
     
     data = []
     for msg in messages:
-        data.append({
+        message_data = {
             'id': msg.id,
             'sender_role': msg.sender_role,
             'sender_name': msg.sender_user.get_full_name() if msg.sender_user else 'System',
             'message': msg.message,
             'timestamp': msg.timestamp.strftime('%I:%M %p'),
             'is_read': msg.is_read,
-        })
+        }
+        
+        # Add attachment info if present
+        if msg.attachment:
+            message_data['attachment_url'] = msg.attachment.url
+            # Determine attachment type from file extension
+            if msg.attachment.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                message_data['attachment_type'] = 'image'
+            elif msg.attachment.name.lower().endswith(('.mp4', '.mov')):
+                message_data['attachment_type'] = 'video'
+        
+        data.append(message_data)
     
     return JsonResponse({'messages': data})
 
@@ -123,11 +134,17 @@ def get_conversation_messages(request, conversation_id):
 def send_message(request, conversation_id):
     """Send a message in a conversation"""
     try:
-        data = json.loads(request.body)
-        message_text = data.get('message', '').strip()
+        # Handle both JSON and FormData
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            message_text = request.POST.get('message', '').strip()
+            attachment = request.FILES.get('attachment')
+        else:
+            data = json.loads(request.body)
+            message_text = data.get('message', '').strip()
+            attachment = None
         
-        if not message_text:
-            return JsonResponse({'error': 'Message cannot be empty'}, status=400)
+        if not message_text and not attachment:
+            return JsonResponse({'error': 'Message or attachment required'}, status=400)
         
         conversation = ChatConversation.objects.get(id=conversation_id)
         
@@ -160,7 +177,8 @@ def send_message(request, conversation_id):
             conversation=conversation,
             sender_role=sender_role,
             sender_user=request.user,
-            message=message_text
+            message=message_text or '📎 Attachment',
+            attachment=attachment
         )
         
         conversation.updated_at = timezone.now()
@@ -172,7 +190,7 @@ def send_message(request, conversation_id):
                 recipient=conversation.teacher.user,
                 notification_type='new_message',
                 title='New Message from Parent',
-                message=f'{request.user.get_full_name()}: {message_text[:50]}...',
+                message=f'{request.user.get_full_name()}: {message_text[:50]}...' if message_text else 'Sent an attachment',
                 link_url=f'/teacher/messages/{conversation.id}/'
             )
         elif sender_role == 'teacher':
@@ -180,7 +198,7 @@ def send_message(request, conversation_id):
                 recipient=conversation.parent.user,
                 notification_type='new_message',
                 title='New Message from Teacher',
-                message=f'{request.user.get_full_name()}: {message_text[:50]}...',
+                message=f'{request.user.get_full_name()}: {message_text[:50]}...' if message_text else 'Sent an attachment',
                 link_url=f'/parent/messages/{conversation.id}/'
             )
         
@@ -195,6 +213,7 @@ def send_message(request, conversation_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
+        print(f"Send message error: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -326,12 +345,80 @@ def create_conversation(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+# ==================== GET FAQs ====================
+
+@login_required
+@require_http_methods(["GET"])
+def get_faqs(request):
+    """Get all active FAQ bot messages for display"""
+    try:
+        bot_messages = BotMessage.objects.filter(
+            is_active=True
+        ).order_by('category', '-priority')
+        
+        faqs = []
+        for bot_msg in bot_messages:
+            # Generate question from keywords (take first keyword as question base)
+            keywords = bot_msg.get_keywords_list()
+            
+            # Create a proper question based on category
+            if bot_msg.category == 'enrollment':
+                if 'payment' in bot_msg.keywords.lower() or 'fee' in bot_msg.keywords.lower():
+                    question = 'Do you charge tuition fees?'
+                else:
+                    question = 'What are your enrollment requirements?'
+            elif bot_msg.category == 'schedule':
+                question = 'What are your class schedules?'
+            elif bot_msg.category == 'attendance':
+                question = 'What is your attendance policy?'
+            elif bot_msg.category == 'health':
+                question = 'What should I do if my child is sick?'
+            elif bot_msg.category == 'records':
+                question = 'How can I view my child\'s progress?'
+            elif bot_msg.category == 'contact':
+                if 'teacher' in bot_msg.keywords.lower():
+                    question = 'How do I talk to a teacher?'
+                elif 'update' in bot_msg.keywords.lower():
+                    question = 'How do I update my contact information?'
+                else:
+                    question = 'How can I contact the center?'
+            elif bot_msg.category == 'general':
+                if 'bring' in bot_msg.keywords.lower() or 'supplies' in bot_msg.keywords.lower():
+                    question = 'What should my child bring?'
+                elif 'cancel' in bot_msg.keywords.lower() or 'typhoon' in bot_msg.keywords.lower():
+                    question = 'What happens during typhoons?'
+                elif 'location' in bot_msg.keywords.lower():
+                    question = 'Where is the daycare center located?'
+                elif 'curriculum' in bot_msg.keywords.lower():
+                    question = 'What is your curriculum?'
+                elif 'age' in bot_msg.keywords.lower():
+                    question = 'What is the age requirement?'
+                else:
+                    continue  # Skip other general FAQs
+            else:
+                continue  # Skip greetings and generic help
+            
+            faqs.append({
+                'id': bot_msg.id,
+                'category': bot_msg.category,
+                'question': question,
+                'answer': bot_msg.response_text,
+                'priority': bot_msg.priority
+            })
+        
+        return JsonResponse({'faqs': faqs})
+        
+    except Exception as e:
+        print(f"Get FAQs error: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 # ==================== SEARCH BOT RESPONSES ====================
 
 @login_required
 @require_http_methods(["POST"])
 def search_bot_response(request):
-    """Search for bot response based on user message"""
+    """Search for bot response based on user message with improved intelligence"""
     try:
         data = json.loads(request.body)
         message = data.get('message', '').strip().lower()
@@ -339,33 +426,77 @@ def search_bot_response(request):
         if not message:
             return JsonResponse({'found': False})
         
-        # Split message into words
-        words = message.split()
+        # Clean the message
+        original_message = message
         
-        # Build query to search keywords
-        query = Q()
-        for word in words:
-            if len(word) >= 3:  # Only search words with 3+ characters
-                query |= Q(keywords__icontains=word)
+        # Remove common stop words that cause false matches
+        stop_words = ['i', 'a', 'an', 'the', 'to', 'for', 'of', 'in', 'on', 'at', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being']
+        words = [word.strip('.,!?;:') for word in message.split()]
+        meaningful_words = [w for w in words if w not in stop_words and len(w) >= 3]
         
-        # Get matching bot messages, ordered by priority
-        bot_messages = BotMessage.objects.filter(
-            query,
-            is_active=True
-        ).order_by('-priority', '-usage_count')
+        if not meaningful_words:
+            return JsonResponse({'found': False})
         
-        if bot_messages.exists():
-            bot_msg = bot_messages.first()
+        # Get all active bot messages
+        all_bot_messages = BotMessage.objects.filter(is_active=True)
+        
+        # Score each bot message based on keyword matches
+        scored_messages = []
+        
+        for bot_msg in all_bot_messages:
+            score = 0
+            keywords = bot_msg.get_keywords_list()
             
-            # Increment usage count
-            bot_msg.usage_count += 1
-            bot_msg.save(update_fields=['usage_count'])
+            # HIGHEST PRIORITY: Multi-word phrase exact match
+            for keyword in keywords:
+                if len(keyword.split()) > 1 and keyword in original_message:
+                    score += 50  # Very high score for phrase match
             
-            return JsonResponse({
-                'found': True,
-                'response': bot_msg.response_text,
-                'category': bot_msg.category
-            })
+            # HIGH PRIORITY: Check for exact phrase patterns
+            # Special case: "talk to teacher", "speak to teacher", etc.
+            if 'teacher' in meaningful_words:
+                if any(phrase in original_message for phrase in ['talk to teacher', 'speak to teacher', 'contact teacher', 'message teacher', 'chat with teacher', 'connect with teacher']):
+                    if 'teacher' in bot_msg.keywords.lower():
+                        score += 100  # Highest priority for teacher contact
+            
+            # MEDIUM PRIORITY: Exact single word match (but only meaningful words)
+            for word in meaningful_words:
+                for keyword in keywords:
+                    # Exact word match
+                    if word == keyword:
+                        score += 10
+                    # Keyword is part of the word (or vice versa) but must be substantial
+                    elif len(word) >= 4 and len(keyword) >= 4:
+                        if word in keyword or keyword in word:
+                            score += 3
+            
+            # Bonus for high priority messages
+            score += bot_msg.priority * 0.3
+            
+            if score > 0:
+                scored_messages.append((score, bot_msg))
+        
+        # Sort by score (highest first)
+        scored_messages.sort(reverse=True, key=lambda x: x[0])
+        
+        if scored_messages:
+            best_message = scored_messages[0][1]
+            best_score = scored_messages[0][0]
+            
+            # Log for debugging
+            print(f"Query: '{message}' -> Matched: '{best_message.category}' with score {best_score}")
+            
+            # Only return if score is meaningful (> 5)
+            if best_score > 5:
+                # Increment usage count
+                best_message.usage_count += 1
+                best_message.save(update_fields=['usage_count'])
+                
+                return JsonResponse({
+                    'found': True,
+                    'response': best_message.response_text,
+                    'category': best_message.category
+                })
         
         return JsonResponse({'found': False})
         
@@ -399,6 +530,86 @@ def get_unread_count(request):
         
         return JsonResponse({'unread_count': total_unread})
         
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+# ==================== GET PROFILE INFO ====================
+
+@login_required
+@require_http_methods(["GET"])
+def get_parent_profile(request, conversation_id):
+    """Get parent profile information for teachers"""
+    try:
+        teacher = request.user.teacher_profile
+    except:
+        return JsonResponse({'error': 'Not a teacher'}, status=403)
+    
+    try:
+        conversation = ChatConversation.objects.get(id=conversation_id)
+        
+        # Verify this is the teacher's conversation
+        if conversation.teacher and conversation.teacher != teacher:
+            return JsonResponse({'error': 'Not authorized'}, status=403)
+        
+        parent = conversation.parent
+        
+        data = {
+            'name': parent.user.get_full_name(),
+            'email': parent.parent_email,
+            'contact': parent.parent_contact,
+            'address': parent.address,
+            'child_name': conversation.child.get_full_name() if conversation.child else 'N/A',
+            'relationship': parent.get_relationship_to_child_display() if hasattr(parent, 'relationship_to_child') else 'Parent',
+        }
+        
+        return JsonResponse(data)
+        
+    except ChatConversation.DoesNotExist:
+        return JsonResponse({'error': 'Conversation not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_teacher_profile(request, conversation_id):
+    """Get teacher profile information for parents"""
+    try:
+        parent = request.user.parent_profile
+    except:
+        return JsonResponse({'error': 'Not a parent'}, status=403)
+    
+    try:
+        conversation = ChatConversation.objects.get(id=conversation_id)
+        
+        # Verify this is the parent's conversation
+        if conversation.parent != parent:
+            return JsonResponse({'error': 'Not authorized'}, status=403)
+        
+        teacher = conversation.teacher
+        
+        if not teacher:
+            return JsonResponse({'error': 'Teacher not assigned'}, status=404)
+        
+        # Get section from classes
+        from monitoring.models import Class
+        classes = Class.objects.filter(teacher=teacher, is_active=True)
+        section = classes.first().class_name if classes.exists() else teacher.department
+        
+        data = {
+            'name': teacher.user.get_full_name(),
+            'email': teacher.contact_email or teacher.user.email,
+            'contact': teacher.contact_number,
+            'department': teacher.department,
+            'section': section,
+            'specialization': teacher.specialization,
+        }
+        
+        return JsonResponse(data)
+        
+    except ChatConversation.DoesNotExist:
+        return JsonResponse({'error': 'Conversation not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 

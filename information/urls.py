@@ -126,10 +126,24 @@ urlpatterns = [
     path('api/chat/bot-search/', 
          api_views.search_bot_response, 
          name='api_bot_search'),
+
+     # Get profile information
+    path('api/chat/parent-profile/<int:conversation_id>/', 
+         api_views.get_parent_profile, 
+         name='api_parent_profile'),
+    
+    path('api/chat/teacher-profile/<int:conversation_id>/', 
+         api_views.get_teacher_profile, 
+         name='api_teacher_profile'),
     
     # Mark conversation as resolved
     path('api/chat/conversation/<int:conversation_id>/resolve/', 
          api_views.mark_conversation_resolved, 
          name='api_resolve_conversation'),
+
+     # Get FAQs
+    path('api/chat/get-faqs/', 
+         api_views.get_faqs, 
+         name='api_get_faqs'),
 
 ]

@@ -1,6 +1,34 @@
 # information/management/commands/populate_faq.py
 # Run with: python manage.py populate_faq
 
+"""
+PURPOSE OF THIS COMMAND:
+========================
+This management command populates your database with predefined FAQ responses
+for the KinderCare chatbot assistant. 
+
+WHY IT'S NEEDED:
+- The chatbot needs questions and answers stored in the database
+- Instead of manually adding 10+ FAQs through Django admin, this command does it automatically
+- It creates BotMessage entries that the chatbot uses to respond to parents
+
+WHEN TO USE:
+- After first installation of the chat system
+- When you want to reset/update FAQ responses
+- When deploying to a new server/environment
+
+HOW IT WORKS:
+1. Creates/updates BotMessage records in the database
+2. Each FAQ has keywords that trigger the response
+3. The chatbot searches these keywords to find matching answers
+4. If no match is found, bot offers to connect parent with a teacher
+
+EXAMPLE:
+- Parent types: "How do I enroll?"
+- Bot searches keywords: "enrollment, enroll, requirements..."
+- Bot finds match and responds with enrollment requirements
+"""
+
 from django.core.management.base import BaseCommand
 from information.models import BotMessage
 
@@ -39,7 +67,7 @@ class Command(BaseCommand):
             {
                 'category': 'contact',
                 'keywords': 'contact, phone, email, address, location, office, reach',
-                'response_text': 'You can reach us at: Phone: (074) 424-xxxx, Email: kindercare@school.edu.ph, Office Hours: Monday-Friday, 7:30 AM - 4:30 PM',
+                'response_text': 'You can reach us at: Phone: (+63) 0945-529-xxxx, Email: anonasdaycarecenter@school.edu.ph, Office Hours: Monday-Friday, 7:30 AM - 4:30 PM',
                 'priority': 7
             },
             {
@@ -57,7 +85,7 @@ class Command(BaseCommand):
             {
                 'category': 'enrollment',
                 'keywords': 'payment, tuition, fee, pay, cost, price, how much',
-                'response_text': 'Tuition fees can be paid monthly or quarterly. Monthly payments are due on the 5th of each month. We accept cash, check, and bank transfer. Please see the accounting office for payment arrangements.',
+                'response_text': 'We do not charge tuition fees! However, some payments can be incurred to aid the learning development of your child, such as purchase of books and learning materials.',
                 'priority': 7
             },
             {
@@ -93,40 +121,22 @@ class Command(BaseCommand):
         ]
 
         created_count = 0
-        updated_count = 0
 
         for faq_data in faqs:
-            # Check if similar message exists
-            existing = BotMessage.objects.filter(
-                category=faq_data['category'],
-                keywords__icontains=faq_data['keywords'].split(',')[0]
-            ).first()
-
-            if existing:
-                # Update existing
-                for key, value in faq_data.items():
-                    setattr(existing, key, value)
-                existing.is_active = True
-                existing.save()
-                updated_count += 1
-                self.stdout.write(
-                    self.style.WARNING(f'Updated: {existing.category} - {existing.keywords[:30]}...')
-                )
-            else:
-                # Create new
-                BotMessage.objects.create(
-                    **faq_data,
-                    is_active=True,
-                    has_buttons=False,
-                    usage_count=0
-                )
-                created_count += 1
-                self.stdout.write(
-                    self.style.SUCCESS(f'Created: {faq_data["category"]} - {faq_data["keywords"][:30]}...')
-                )
+            # Create new FAQ
+            BotMessage.objects.create(
+                **faq_data,
+                is_active=True,
+                has_buttons=False,
+                usage_count=0
+            )
+            created_count += 1
+            self.stdout.write(
+                self.style.SUCCESS(f'Created: {faq_data["category"]} - {faq_data["keywords"][:50]}...')
+            )
 
         self.stdout.write(
             self.style.SUCCESS(
-                f'\nSuccessfully populated FAQ messages: {created_count} created, {updated_count} updated'
+                f'\n✅ Successfully populated {created_count} FAQ messages for Anonas Day Care Center'
             )
         )

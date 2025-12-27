@@ -5,58 +5,8 @@
     'use strict';
 
     // ==================== CONFIGURATION ====================
-    const FAQ_DATA = [
-        {
-            id: 1,
-            question: 'What are your enrollment requirements?',
-            answer: 'To enroll your child, you need: Birth Certificate, Immunization Records, 2x2 ID Photos (4pcs), Health Certificate, and filled-out enrollment form. Please visit our office during enrollment period.'
-        },
-        {
-            id: 2,
-            question: 'What are your class schedules?',
-            answer: 'Our kindergarten classes run from 8:00 AM to 12:00 PM, Monday to Friday. Extended care is available until 3:00 PM for working parents.'
-        },
-        {
-            id: 3,
-            question: 'What is your attendance policy?',
-            answer: 'Regular attendance is important for your child\'s development. Please notify us if your child will be absent. Excused absences require a parent note or medical certificate.'
-        },
-        {
-            id: 4,
-            question: 'What should I do if my child is sick?',
-            answer: 'Please keep your child at home if they have fever, cough, or any contagious illness. They may return 24 hours after symptoms subside. Always inform the teacher about any medical conditions.'
-        },
-        {
-            id: 5,
-            question: 'How can I contact the school?',
-            answer: 'You can reach us at: Phone: (074) 424-xxxx, Email: kindercare@school.edu.ph, Office Hours: Monday-Friday, 7:30 AM - 4:30 PM'
-        },
-        {
-            id: 6,
-            question: 'How can I view my child\'s progress?',
-            answer: 'You can view your child\'s competency records and attendance through your parent dashboard. Reports are updated quarterly and you\'ll receive notifications when new assessments are posted.'
-        },
-        {
-            id: 7,
-            question: 'What items should my child bring to school?',
-            answer: 'Your child should bring: Clean uniform, Snack and water bottle, Extra clothes, Handkerchief/tissue, School bag. Please label all items with your child\'s name.'
-        },
-        {
-            id: 8,
-            question: 'What is your payment schedule?',
-            answer: 'Tuition fees can be paid monthly or quarterly. Monthly payments are due on the 5th of each month. We accept cash, check, and bank transfer. Please see the accounting office for payment arrangements.'
-        },
-        {
-            id: 9,
-            question: 'What is your cancellation policy for classes?',
-            answer: 'Classes are cancelled during typhoons, holidays, and emergencies. We will send announcements through the parent portal and SMS. Make-up classes will be scheduled as needed.'
-        },
-        {
-            id: 10,
-            question: 'How do I update my contact information?',
-            answer: 'You can update your contact information through your Profile page or visit the school office. It\'s important to keep your contact details current for emergency situations.'
-        }
-    ];
+    const FAQ_DATA = []; // Will be loaded from database
+    let FAQ_LOADED = false;
 
     // ==================== STATE MANAGEMENT ====================
     let chatState = {
@@ -66,7 +16,8 @@
         userRole: null,
         userName: null,
         csrfToken: null,
-        messageRefreshInterval: null
+        messageRefreshInterval: null,
+        selectedFile: null
     };
 
     // ==================== UTILITY FUNCTIONS ====================
@@ -133,8 +84,33 @@
     }
 
     function initParentConversations() {
-        // Load bot conversation and existing teacher conversations from server
-        loadParentConversations();
+        // Load FAQs from database first
+        loadFAQs().then(() => {
+            // Then load bot conversation and existing teacher conversations from server
+            loadParentConversations();
+        });
+    }
+    
+    function loadFAQs() {
+        return fetch('/information/api/chat/get-faqs/', {
+            headers: {
+                'X-CSRFToken': chatState.csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Clear and populate FAQ_DATA
+            FAQ_DATA.length = 0;
+            data.faqs.forEach(faq => {
+                FAQ_DATA.push(faq);
+            });
+            FAQ_LOADED = true;
+            console.log('FAQs loaded:', FAQ_DATA.length);
+        })
+        .catch(error => {
+            console.error('Error loading FAQs:', error);
+            FAQ_LOADED = true; // Continue even if FAQs fail to load
+        });
     }
 
     function loadParentConversations() {
@@ -272,6 +248,8 @@
                 <div class="kc-messages-container" id="kcMessagesContainer"></div>
 
                 <div class="kc-message-input-container" id="kcMessageInputContainer">
+                    <input type="file" id="kcFileInput" accept="image/*,video/*" style="display: none;" onchange="window.kcHandleFileSelect(event)">
+                    <button class="kc-attach-btn" id="kcAttachBtn" onclick="document.getElementById('kcFileInput').click()">📎</button>
                     <input type="text" class="kc-message-input" id="kcMessageInput" placeholder="Type a message...">
                     <button class="kc-send-btn" id="kcSendBtn">➤</button>
                 </div>
@@ -352,7 +330,6 @@
                         <div class="kc-conv-time">${conv.lastTime}</div>
                     </div>
                     <div class="kc-conv-last-message">${conv.lastMessage}</div>
-                    ${conv.type === 'parent' ? `<div style="font-size: 12px; color: #999;">Child: ${conv.childName}</div>` : ''}
                 </div>
                 ${conv.unread > 0 ? `<div class="kc-conv-unread">${conv.unread}</div>` : ''}
             </div>
@@ -378,12 +355,30 @@
         document.getElementById('kcBackBtn').style.display = 'block';
         
         let headerText = conv.name;
+        let headerHTML = `<div style="display: flex; align-items: center; gap: 8px; flex: 1;">`;
+        
         if (conv.type === 'teacher') {
-            headerText += ` - ${conv.section}`;
+            headerHTML += `
+                <span>${conv.name} - ${conv.section}</span>
+                <button onclick="window.kcViewProfile('teacher', '${conv.id}')" 
+                        class="kc-view-profile-btn" title="View Profile">
+                    ℹ️
+                </button>
+            `;
         } else if (conv.type === 'parent') {
-            headerText += ` (${conv.childName})`;
+            headerHTML += `
+                <span>${conv.name}</span>
+                <button onclick="window.kcViewProfile('parent', '${conv.id}')" 
+                        class="kc-view-profile-btn" title="View Profile">
+                    ℹ️
+                </button>
+            `;
+        } else {
+            headerHTML += `<span>${conv.name}</span>`;
         }
-        document.getElementById('kcHeaderTitle').textContent = headerText;
+        
+        headerHTML += `</div>`;
+        document.getElementById('kcHeaderTitle').innerHTML = headerHTML;
         
         renderMessages();
         
@@ -418,12 +413,24 @@
             const conv = chatState.conversations.find(c => c.id === convId);
             if (conv) {
                 const oldLength = conv.messages.length;
-                conv.messages = data.messages.map(msg => ({
-                    id: msg.id,
-                    sender: msg.sender_role,
-                    text: msg.message,
-                    time: msg.timestamp
-                }));
+                conv.messages = data.messages.map(msg => {
+                    const message = {
+                        id: msg.id,
+                        sender: msg.sender_role,
+                        text: msg.message,
+                        time: msg.timestamp
+                    };
+                    
+                    // Add attachment if present
+                    if (msg.attachment_url) {
+                        message.attachment = {
+                            type: msg.attachment_type || 'image',
+                            url: msg.attachment_url
+                        };
+                    }
+                    
+                    return message;
+                });
                 
                 // Only render if not silent or if new messages arrived
                 if (!silent || conv.messages.length !== oldLength) {
@@ -483,48 +490,35 @@
                 html += `<div class="kc-message-bubble kc-system">${msg.text}</div>`;
             } else {
                 html += `<div class="kc-message-bubble">${msg.text}</div>`;
+                
+                // Show attachment if present
+                if (msg.attachment) {
+                    if (msg.attachment.type === 'image') {
+                        html += `
+                            <div class="kc-attachment">
+                                <img src="${msg.attachment.url}" alt="Image" class="kc-attachment-image" onclick="window.open('${msg.attachment.url}', '_blank')">
+                            </div>
+                        `;
+                    } else if (msg.attachment.type === 'video') {
+                        html += `
+                            <div class="kc-attachment">
+                                <video controls class="kc-attachment-video">
+                                    <source src="${msg.attachment.url}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        `;
+                    }
+                }
             }
             
             html += `<div class="kc-message-time">${msg.time}</div>`;
             
             if (msg.showFAQ) {
-                html += `
-                    <div class="kc-faq-options">
-                        <details class="kc-faq-category">
-                            <summary>📚 Enrollment & Admission</summary>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(1)">What are your enrollment requirements?</button>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(8)">What is your payment schedule?</button>
-                        </details>
-                        
-                        <details class="kc-faq-category">
-                            <summary>🕐 Schedules & Attendance</summary>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(2)">What are your class schedules?</button>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(3)">What is your attendance policy?</button>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(9)">What is your cancellation policy?</button>
-                        </details>
-                        
-                        <details class="kc-faq-category">
-                            <summary>🏥 Health & Safety</summary>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(4)">What should I do if my child is sick?</button>
-                        </details>
-                        
-                        <details class="kc-faq-category">
-                            <summary>📊 Progress & Records</summary>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(6)">How can I view my child's progress?</button>
-                        </details>
-                        
-                        <details class="kc-faq-category">
-                            <summary>📞 Contact & Information</summary>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(5)">How can I contact the school?</button>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(10)">How do I update my contact information?</button>
-                        </details>
-                        
-                        <details class="kc-faq-category">
-                            <summary>🎒 School Supplies & Requirements</summary>
-                            <button class="kc-faq-button" onclick="window.kcSelectFAQ(7)">What should my child bring to school?</button>
-                        </details>
-                    </div>
-                `;
+                html += `<div class="kc-faq-container">`;
+                html += `<button class="kc-faq-toggle" onclick="window.kcToggleFAQ(this)">📚 Choose FAQ</button>`;
+                html += `<div class="kc-faq-options" style="display: none;"></div>`;
+                html += `</div>`;
             }
             
             if (msg.showTeacherPrompt) {
@@ -571,6 +565,12 @@
         
         container.scrollTop = container.scrollHeight;
     }
+    
+    function renderFAQOptions() {
+        // This function is no longer used - FAQs are rendered on-demand when button is clicked
+        // Keeping for backwards compatibility
+        return;
+    }
 
     function loadTeachers() {
         fetch('/information/api/chat/available-teachers/', {
@@ -612,22 +612,33 @@
         const input = document.getElementById('kcMessageInput');
         const text = input.value.trim();
         
-        if (!text) return;
+        if (!text && !chatState.selectedFile) return;
         
         const conv = chatState.conversations.find(c => c.id === chatState.activeConvId);
         
         const newMessage = {
             id: Date.now(),
             sender: chatState.userRole,
-            text: text,
+            text: text || '📎 Attachment',
             time: getCurrentTime()
         };
         
+        // If file is selected, add attachment info
+        if (chatState.selectedFile) {
+            newMessage.attachment = {
+                type: chatState.selectedFile.type.startsWith('image/') ? 'image' : 'video',
+                url: URL.createObjectURL(chatState.selectedFile),
+                file: chatState.selectedFile
+            };
+        }
+        
         conv.messages.push(newMessage);
-        conv.lastMessage = text;
+        conv.lastMessage = text || '📎 Attachment';
         conv.lastTime = getCurrentTime();
         
         input.value = '';
+        chatState.selectedFile = null;
+        document.getElementById('kcFileInput').value = '';
         renderMessages();
         
         // Handle bot conversation
@@ -640,7 +651,7 @@
             searchBotResponse(text, conv);
         } else {
             // Send to server
-            saveMessage(chatState.activeConvId, text);
+            saveMessage(chatState.activeConvId, text, newMessage.attachment?.file);
         }
     }
     
@@ -700,16 +711,20 @@
         });
     }
 
-    function saveMessage(conversationId, messageText) {
+    function saveMessage(conversationId, messageText, attachmentFile) {
+        const formData = new FormData();
+        formData.append('message', messageText || '');
+        
+        if (attachmentFile) {
+            formData.append('attachment', attachmentFile);
+        }
+        
         fetch(`/information/api/chat/conversation/${conversationId}/send/`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 'X-CSRFToken': chatState.csrfToken
             },
-            body: JSON.stringify({
-                message: messageText
-            })
+            body: formData
         })
         .then(response => response.json())
         .then(data => {
@@ -722,6 +737,11 @@
 
     function selectFAQ(faqId) {
         const faq = FAQ_DATA.find(f => f.id === faqId);
+        if (!faq) {
+            console.error('FAQ not found:', faqId);
+            return;
+        }
+        
         const conv = chatState.conversations.find(c => c.id === chatState.activeConvId);
         
         conv.messages.push({
@@ -833,6 +853,177 @@
     window.kcShowTeacherSelect = showTeacherSelect;
     window.kcDeclineTeacher = declineTeacher;
     window.kcSelectTeacher = selectTeacher;
+    window.kcHandleFileSelect = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/quicktime'];
+        if (!validTypes.includes(file.type)) {
+            alert('Please select an image (JPG, PNG, GIF) or video (MP4, MOV) file.');
+            event.target.value = '';
+            return;
+        }
+        
+        // Validate file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+            alert('File size must be less than 10MB.');
+            event.target.value = '';
+            return;
+        }
+        
+        chatState.selectedFile = file;
+        
+        // Show file preview or name
+        const input = document.getElementById('kcMessageInput');
+        input.placeholder = `📎 ${file.name} - Click send to attach`;
+    };
+    window.kcToggleFAQ = function(button) {
+        const faqOptions = button.nextElementSibling;
+        
+        if (faqOptions.style.display === 'none') {
+            // Render FAQs if not already rendered
+            if (!faqOptions.innerHTML || faqOptions.innerHTML.trim() === '') {
+                renderFAQOptionsInContainer(faqOptions);
+            }
+            faqOptions.style.display = 'block';
+            button.textContent = '❌ Close FAQ';
+        } else {
+            faqOptions.style.display = 'none';
+            button.textContent = '📚 Choose FAQ';
+        }
+    };
+    
+    function renderFAQOptionsInContainer(container) {
+        if (!FAQ_LOADED || FAQ_DATA.length === 0) {
+            container.innerHTML = '<div style="padding: 10px; text-align: center; color: #65676b;">Loading FAQs...</div>';
+            return;
+        }
+        
+        // Group FAQs by category
+        const categories = {
+            'enrollment': { title: '📚 Enrollment & Fees', faqs: [] },
+            'schedule': { title: '🕐 Schedules & Hours', faqs: [] },
+            'attendance': { title: '📅 Attendance', faqs: [] },
+            'health': { title: '🏥 Health & Safety', faqs: [] },
+            'records': { title: '📊 Progress & Records', faqs: [] },
+            'contact': { title: '📞 Contact & Teachers', faqs: [] },
+            'general': { title: '🎒 General Info', faqs: [] }
+        };
+        
+        // Categorize FAQs (skip greetings and help)
+        FAQ_DATA.forEach(faq => {
+            if (faq.category !== 'greeting' && faq.category !== 'faq') {
+                if (categories[faq.category]) {
+                    categories[faq.category].faqs.push(faq);
+                }
+            }
+        });
+        
+        // Build HTML
+        let html = '';
+        for (const [key, cat] of Object.entries(categories)) {
+            if (cat.faqs.length > 0) {
+                html += `<details class="kc-faq-category">`;
+                html += `<summary>${cat.title}</summary>`;
+                cat.faqs.forEach(faq => {
+                    html += `<button class="kc-faq-button" onclick="window.kcSelectFAQ(${faq.id})">${faq.question}</button>`;
+                });
+                html += `</details>`;
+            }
+        }
+        
+        container.innerHTML = html;
+    }
+    window.kcViewProfile = function(type, convId) {
+        const conv = chatState.conversations.find(c => c.id === convId);
+        if (!conv) return;
+        
+        // Create profile modal
+        const modal = document.createElement('div');
+        modal.className = 'kc-profile-modal';
+        modal.innerHTML = `
+            <div class="kc-profile-overlay" onclick="this.parentElement.remove()"></div>
+            <div class="kc-profile-content">
+                <div class="kc-profile-header">
+                    <h3>${conv.name}</h3>
+                    <button onclick="this.closest('.kc-profile-modal').remove()" class="kc-profile-close">×</button>
+                </div>
+                <div class="kc-profile-body">
+                    <div class="kc-profile-loading">Loading profile...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Fetch profile data
+        const url = type === 'parent' 
+            ? `/information/api/chat/parent-profile/${convId}/`
+            : `/information/api/chat/teacher-profile/${convId}/`;
+        
+        fetch(url, {
+            headers: {
+                'X-CSRFToken': chatState.csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const body = modal.querySelector('.kc-profile-body');
+            
+            if (type === 'parent') {
+                body.innerHTML = `
+                    <div class="kc-profile-avatar">${conv.avatar}</div>
+                    <div class="kc-profile-info">
+                        <div class="kc-profile-item">
+                            <strong>Name:</strong> ${data.name}
+                        </div>
+                        <div class="kc-profile-item">
+                            <strong>Email:</strong> ${data.email}
+                        </div>
+                        <div class="kc-profile-item">
+                            <strong>Contact:</strong> ${data.contact}
+                        </div>
+                        <div class="kc-profile-item">
+                            <strong>Child:</strong> ${data.child_name || 'N/A'}
+                        </div>
+                        ${data.address ? `
+                        <div class="kc-profile-item">
+                            <strong>Address:</strong> ${data.address}
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                body.innerHTML = `
+                    <div class="kc-profile-avatar">${conv.avatar}</div>
+                    <div class="kc-profile-info">
+                        <div class="kc-profile-item">
+                            <strong>Name:</strong> ${data.name}
+                        </div>
+                        <div class="kc-profile-item">
+                            <strong>Department:</strong> ${data.department}
+                        </div>
+                        <div class="kc-profile-item">
+                            <strong>Section:</strong> ${data.section}
+                        </div>
+                        <div class="kc-profile-item">
+                            <strong>Email:</strong> ${data.email}
+                        </div>
+                        ${data.contact ? `
+                        <div class="kc-profile-item">
+                            <strong>Contact:</strong> ${data.contact}
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            const body = modal.querySelector('.kc-profile-body');
+            body.innerHTML = '<div class="kc-profile-error">Could not load profile</div>';
+        });
+    };
 
     // ==================== INITIALIZE ON LOAD ====================
     if (document.readyState === 'loading') {
